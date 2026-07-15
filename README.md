@@ -1,55 +1,47 @@
-# Text Express 5.0
+# Text Express 6.0
 
-Ferramenta local de scripts para atendimento e registros internos de protocolo.
+Ferramenta local para scripts de atendimento e registros internos de protocolo.
 
-## Novidade principal: sequências de falas
+## Controle de tela grande
 
-As sequências existem **somente na aba Atendimento**.
+Os controles do cabeçalho ficam nesta ordem:
 
-Ao criar um atendimento, escolha:
+`Tema  —  Tela grande  Fechar`
 
-- **Fala única**: um texto independente;
-- **Sequência de falas**: várias mensagens ligadas ao mesmo assunto.
+O ícone de tela grande:
 
-Os protocolos continuam sendo textos únicos e completos.
+- faz o painel preencher toda a área visível do navegador;
+- muda para o ícone de restaurar enquanto estiver expandido;
+- volta ao tamanho e à posição anteriores quando clicado novamente;
+- também pode ser restaurado pressionando `Esc`;
+- não permite arrastar o painel enquanto ele ocupa toda a tela;
+- ao minimizar ou fechar, retorna ao pequeno launcher flutuante.
 
-### Exemplo incluído
+Não foi adicionada configuração automática. O modo de tela grande só é ativado quando o usuário clica no ícone.
 
-**Roteador sem gerência**
+## Sequências de falas
+
+As sequências permanecem exclusivas da aba Atendimento.
 
 - `/semgerencia` abre a sequência;
-- `/semgerencia1` insere a explicação do problema;
-- `/semgerencia2` informa que serão realizadas atualizações;
-- `/semgerencia3` solicita o reinício dos equipamentos.
+- `/semgerencia1`, `/semgerencia2` e `/semgerencia3` inserem falas diretamente;
+- protocolos permanecem como textos únicos;
+- botão Inserir e avançar;
+- variáveis compartilhadas;
+- falas opcionais;
+- ordem editável.
 
-Dentro da sequência também existem os botões:
+## Outros recursos
 
-- **Inserir**;
-- **Inserir e avançar**;
-- reiniciar sequência;
-- marcar falas opcionais;
-- preencher variáveis compartilhadas uma única vez.
-
-## Interface mais leve
-
-- painel reduzido;
-- menos bordas e cores fortes;
-- cards compactos;
-- categorias menores;
-- detalhes simplificados;
-- rodapé e botões discretos;
-- launcher pequeno e arrastável preservado.
-
-## Recursos mantidos
-
-- scripts e protocolos existentes;
-- atalhos personalizados;
-- busca, categorias e favoritos;
-- variáveis `[nome]`, `[prazo]` etc.;
-- importar, exportar e restaurar;
-- modo claro e escuro;
+- interface compacta;
+- launcher pequeno, arrastável e com posição salva;
+- categorias editáveis;
+- favoritos;
+- busca;
+- importação e exportação;
+- tema claro e escuro;
 - armazenamento local;
-- inserção no campo ativo ou cópia.
+- inserção direta ou cópia.
 
 ## Atualização no GitHub
 
@@ -61,6 +53,4 @@ Substitua na raiz do repositório:
 - `bookmarklet.js`
 - `README.md`
 
-Depois aguarde o GitHub Pages e pressione `Ctrl + F5`.
-
-A versão migra automaticamente as três falas antigas de “Sem Gerência TP-Link” para uma única sequência, preservando os demais modelos.
+Depois aguarde o GitHub Pages atualizar e pressione `Ctrl + F5`.

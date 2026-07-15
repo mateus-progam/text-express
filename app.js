@@ -1,12 +1,12 @@
 /*
- * Text Express 5.0.0
+ * Text Express 6.0.0
  * Expansor de textos para atendimento e registro de protocolos.
  * Sem dependências externas.
  */
 (() => {
   "use strict";
 
-  const APP_VERSION = "5.0.0";
+  const APP_VERSION = "6.0.0";
   const STORAGE_KEYS = Object.freeze({
     snippets: "text_express_snippets",
     darkMode: "te_dark_mode",
@@ -2599,6 +2599,133 @@
       await this.copyText(content);
       this.showToast("Não foi possível inserir; o texto foi copiado.", "error");
     }
+  };
+
+
+
+  /* ==========================================================
+   * Text Express 6.0 — painel em tela grande
+   * Ordem dos controles: tema, minimizar, tela grande e fechar.
+   * ========================================================== */
+  const teV6Original = Object.freeze({
+    init: TextExpressApp.prototype.init,
+    handleRootClick: TextExpressApp.prototype.handleRootClick,
+    onGlobalKeyDown: TextExpressApp.prototype.onGlobalKeyDown,
+    onDragStart: TextExpressApp.prototype.onDragStart,
+    collapseToLauncher: TextExpressApp.prototype.collapseToLauncher
+  });
+
+  TextExpressApp.prototype.init = function () {
+    this.isFullscreen = false;
+    this.fullscreenRestoreStyle = null;
+    return teV6Original.init.call(this);
+  };
+
+  TextExpressApp.prototype.updateFullscreenButton = function () {
+    const button = this.root.querySelector('[data-te-action="fullscreen"]');
+    if (!button) return;
+
+    const use = button.querySelector("use");
+    const expanded = Boolean(this.isFullscreen);
+
+    if (use) {
+      use.setAttribute("href", expanded ? "#te-i-minimize-2" : "#te-i-maximize-2");
+    }
+
+    button.setAttribute("aria-pressed", expanded ? "true" : "false");
+    button.setAttribute(
+      "aria-label",
+      expanded ? "Voltar ao tamanho normal" : "Preencher toda a tela"
+    );
+    button.setAttribute(
+      "title",
+      expanded ? "Voltar ao tamanho normal (Esc)" : "Preencher toda a tela"
+    );
+  };
+
+  TextExpressApp.prototype.enterFullscreen = function () {
+    if (this.isFullscreen || this.panel.classList.contains("te-hidden")) return;
+
+    this.fullscreenRestoreStyle = this.panel.hasAttribute("style")
+      ? this.panel.getAttribute("style")
+      : null;
+
+    this.dragState = null;
+    document.removeEventListener("pointermove", this.onDragMove, true);
+    document.removeEventListener("pointerup", this.onDragEnd, true);
+
+    this.panel.classList.add("te-fullscreen");
+    this.isFullscreen = true;
+    this.updateFullscreenButton();
+
+    window.requestAnimationFrame(() => {
+      this.searchInput?.focus({ preventScroll: true });
+    });
+  };
+
+  TextExpressApp.prototype.exitFullscreen = function () {
+    if (!this.isFullscreen) return;
+
+    this.panel.classList.remove("te-fullscreen");
+
+    if (this.fullscreenRestoreStyle === null) {
+      this.panel.removeAttribute("style");
+    } else {
+      this.panel.setAttribute("style", this.fullscreenRestoreStyle);
+    }
+
+    this.fullscreenRestoreStyle = null;
+    this.isFullscreen = false;
+    this.updateFullscreenButton();
+
+    window.requestAnimationFrame(() => {
+      this.constrainPanel();
+    });
+  };
+
+  TextExpressApp.prototype.toggleFullscreen = function () {
+    if (this.isFullscreen) this.exitFullscreen();
+    else this.enterFullscreen();
+  };
+
+  TextExpressApp.prototype.handleRootClick = function (event) {
+    const actionButton = event.target.closest('[data-te-action="fullscreen"]');
+    if (actionButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.toggleFullscreen();
+      return;
+    }
+
+    return teV6Original.handleRootClick.call(this, event);
+  };
+
+  TextExpressApp.prototype.onGlobalKeyDown = function (event) {
+    if (
+      event.key === "Escape"
+      && this.isFullscreen
+      && this.variableModal.classList.contains("te-hidden")
+      && this.snippetModal.classList.contains("te-hidden")
+      && this.settingsModal.classList.contains("te-hidden")
+      && this.categoryModal.classList.contains("te-hidden")
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.exitFullscreen();
+      return;
+    }
+
+    return teV6Original.onGlobalKeyDown.call(this, event);
+  };
+
+  TextExpressApp.prototype.onDragStart = function (event) {
+    if (this.isFullscreen) return;
+    return teV6Original.onDragStart.call(this, event);
+  };
+
+  TextExpressApp.prototype.collapseToLauncher = function () {
+    if (this.isFullscreen) this.exitFullscreen();
+    return teV6Original.collapseToLauncher.call(this);
   };
 
 

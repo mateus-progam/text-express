@@ -2259,3 +2259,61 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================
+   Text Express 6.0 — tela grande
+   ========================================================== */
+
+#text-express-app .te-panel.te-fullscreen {
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  width: 100dvw !important;
+  max-width: none !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  max-height: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+#text-express-app .te-panel.te-fullscreen .te-header {
+  cursor: default;
+}
+
+#text-express-app .te-panel.te-fullscreen .te-expandable {
+  min-height: 0;
+}
+
+#text-express-app .te-panel.te-fullscreen .te-content-area {
+  min-height: 0;
+}
+
+#text-express-app .te-panel.te-fullscreen .te-list-pane,
+#text-express-app .te-panel.te-fullscreen .te-detail-pane {
+  min-height: 0;
+}
+
+#text-express-app .te-fullscreen-button[aria-pressed="true"] {
+  background: rgba(255, 255, 255, .11);
+  color: #fff;
+}
+
+#text-express-app .te-fullscreen-button[aria-pressed="true"]:hover {
+  background: rgba(255, 255, 255, .18);
+}
+
+@media (max-width: 760px) {
+  #text-express-app .te-panel.te-fullscreen {
+    width: 100vw !important;
+    width: 100dvw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+  }
+}
