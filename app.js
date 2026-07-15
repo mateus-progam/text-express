@@ -1,12 +1,12 @@
 /*
- * Text Express 7.0.0
+ * Text Express 8.0.0
  * Expansor de textos para atendimento e registro de protocolos.
  * Sem dependências externas.
  */
 (() => {
   "use strict";
 
-  const APP_VERSION = "7.0.0";
+  const APP_VERSION = "8.0.0";
   const STORAGE_KEYS = Object.freeze({
     snippets: "text_express_snippets",
     darkMode: "te_dark_mode",
@@ -3429,6 +3429,28 @@
     this.setupModelAutosave();
     this.setupSnippetSync();
 
+    return result;
+  };
+
+
+
+  /* ==========================================================
+   * Text Express 8.0 — legibilidade completa em tela cheia
+   * ========================================================== */
+  const teV8Original = Object.freeze({
+    enterFullscreen: TextExpressApp.prototype.enterFullscreen,
+    exitFullscreen: TextExpressApp.prototype.exitFullscreen
+  });
+
+  TextExpressApp.prototype.enterFullscreen = function () {
+    const result = teV8Original.enterFullscreen.call(this);
+    this.root.classList.add("te-fullscreen-active");
+    return result;
+  };
+
+  TextExpressApp.prototype.exitFullscreen = function () {
+    const result = teV8Original.exitFullscreen.call(this);
+    this.root.classList.remove("te-fullscreen-active");
     return result;
   };
 

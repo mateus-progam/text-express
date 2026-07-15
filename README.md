@@ -1,57 +1,44 @@
-# Text Express 7.0
+# Text Express 8.0
 
-Ferramenta para scripts de atendimento e registros internos de protocolo.
+## Legibilidade corrigida em todas as telas internas
 
-## Nome do atendente lembrado automaticamente
+Quando o Text Express estiver no modo tela cheia, todas as janelas internas agora usam dimensões e fontes adequadas:
 
-Na primeira vez em que um modelo usar `[atendente]`, o Text Express solicitará o nome.
+- edição de fala única;
+- edição de sequência de falas;
+- preenchimento de variáveis;
+- configurações;
+- criação e edição de categorias.
 
-Depois disso:
+### Melhorias aplicadas
 
-- o nome fica salvo no navegador;
-- os próximos modelos com `[atendente]` são preenchidos automaticamente;
-- a janela não será aberta novamente apenas para pedir o nome;
-- o nome pode ser alterado ou apagado em **Configurações → Nome do atendente**.
+- janelas mais largas;
+- títulos de 21 px;
+- campos e textos em 14–15 px;
+- rótulos e explicações maiores;
+- botões mais altos;
+- caixas de seleção mais visíveis;
+- editor de sequência com colunas maiores;
+- área de variáveis mais confortável;
+- configurações com melhor espaçamento;
+- ícones e cores de categorias maiores;
+- barra de rolagem mais fácil de visualizar.
 
-Por segurança, dados variáveis de clientes, protocolos e prazos não ficam gravados permanentemente. A memória automática é usada somente para dados fixos do operador, como `[atendente]`.
-
-## Salvamento automático dos scripts
-
-Ao editar um modelo existente:
-
-- as alterações são salvas automaticamente após uma breve pausa;
-- aparece a mensagem **Salvo automaticamente**;
-- o atalho passa a usar o novo conteúdo imediatamente;
-- o card e a visualização são atualizados;
-- o salvamento é conferido no armazenamento do navegador;
-- fechar a janela de edição não perde a última alteração válida.
-
-Modelos novos ainda precisam do botão **Salvar e concluir** para serem criados.
-
-## Sincronização
-
-Quando o mesmo sistema estiver aberto em mais de uma aba ou janela:
-
-- alterações salvas em uma aba aparecem nas demais;
-- os mapas de atalhos são atualizados;
-- a versão mais recente do texto é usada na próxima inserção;
-- o nome do atendente lembrado também é atualizado.
-
-A sincronização automática funciona entre abas do mesmo site e navegador. Sites diferentes possuem armazenamentos separados por segurança do navegador.
+O modo normal continua compacto. Os tamanhos maiores são aplicados somente quando o painel está preenchendo toda a tela.
 
 ## Recursos preservados
 
-- interface leve;
-- launcher pequeno e arrastável;
+- nome do atendente memorizado;
+- salvamento automático;
+- sincronização entre abas do mesmo site;
+- sequências apenas no Atendimento;
+- protocolos em texto único;
+- launcher arrastável;
 - modo de tela grande;
-- sequências apenas em Atendimento;
-- protocolos como textos únicos;
-- categorias, favoritos e busca;
-- importação e exportação;
-- tema claro e escuro;
-- atalhos personalizados.
+- categorias, favoritos e atalhos;
+- importação e exportação.
 
-## Atualização no GitHub
+## Atualização
 
 Substitua na raiz do repositório:
 

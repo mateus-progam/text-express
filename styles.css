@@ -2422,3 +2422,439 @@
     flex-wrap: wrap;
   }
 }
+
+/* ==========================================================
+   Text Express 8.0 — legibilidade completa em tela cheia
+   Aplica-se ao editor, variáveis, configurações e categorias.
+   ========================================================== */
+
+/* Fundo e posicionamento de todas as janelas internas. */
+#text-express-app.te-fullscreen-active .te-modal-backdrop {
+  padding: 24px;
+}
+
+/* Base comum para todas as janelas. */
+#text-express-app.te-fullscreen-active .te-modal {
+  width: min(900px, calc(100vw - 64px));
+  max-width: none;
+  max-height: calc(100vh - 48px);
+  border-radius: 15px;
+  font-size: 14px;
+}
+
+/* Largura apropriada para cada tipo de janela. */
+#text-express-app.te-fullscreen-active #te-snippet-modal .te-modal {
+  width: min(1180px, calc(100vw - 64px));
+}
+
+#text-express-app.te-fullscreen-active #te-category-modal .te-modal {
+  width: min(980px, calc(100vw - 64px));
+}
+
+#text-express-app.te-fullscreen-active #te-settings-modal .te-modal {
+  width: min(900px, calc(100vw - 64px));
+}
+
+#text-express-app.te-fullscreen-active #te-variable-modal .te-modal {
+  width: min(760px, calc(100vw - 64px));
+}
+
+/* Cabeçalho das janelas. */
+#text-express-app.te-fullscreen-active .te-modal-header {
+  min-height: 68px;
+  padding: 14px 20px;
+}
+
+#text-express-app.te-fullscreen-active .te-modal-kicker {
+  font-size: 11px;
+  line-height: 1.25;
+  letter-spacing: .045em;
+}
+
+#text-express-app.te-fullscreen-active .te-modal-header h2 {
+  margin-top: 3px;
+  font-size: 21px;
+  line-height: 1.2;
+}
+
+#text-express-app.te-fullscreen-active .te-modal-header .te-icon-button {
+  width: 38px;
+  height: 38px;
+}
+
+/* Campos, rótulos e textos auxiliares em todos os formulários. */
+#text-express-app.te-fullscreen-active .te-modal form {
+  font-size: 14px;
+}
+
+#text-express-app.te-fullscreen-active .te-form-grid {
+  gap: 14px 16px;
+  padding: 16px 22px 18px;
+}
+
+#text-express-app.te-fullscreen-active .te-field > span,
+#text-express-app.te-fullscreen-active .te-field label > span,
+#text-express-app.te-fullscreen-active .te-modal label > span {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+#text-express-app.te-fullscreen-active .te-modal input[type="text"],
+#text-express-app.te-fullscreen-active .te-modal input:not([type]),
+#text-express-app.te-fullscreen-active .te-modal select {
+  min-height: 42px;
+  padding: 9px 11px;
+  font-size: 14px;
+}
+
+#text-express-app.te-fullscreen-active .te-modal textarea {
+  min-height: 130px;
+  padding: 11px 12px;
+  font-size: 14px;
+  line-height: 1.58;
+}
+
+#text-express-app.te-fullscreen-active .te-modal small,
+#text-express-app.te-fullscreen-active .te-field-help,
+#text-express-app.te-fullscreen-active .te-field-error {
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+/* Botões das janelas. */
+#text-express-app.te-fullscreen-active .te-modal .te-primary-button,
+#text-express-app.te-fullscreen-active .te-modal .te-secondary-button,
+#text-express-app.te-fullscreen-active .te-modal .te-danger-button {
+  min-height: 40px;
+  padding: 8px 14px;
+  font-size: 12.5px;
+}
+
+#text-express-app.te-fullscreen-active .te-modal .te-inline-button {
+  min-height: 38px;
+  padding: 7px 12px;
+  font-size: 11px;
+}
+
+#text-express-app.te-fullscreen-active .te-modal .te-icon-action,
+#text-express-app.te-fullscreen-active .te-modal .te-inline-icon-button {
+  width: 36px;
+  height: 36px;
+}
+
+#text-express-app.te-fullscreen-active .te-modal-footer {
+  min-height: 64px;
+  padding: 11px 20px;
+}
+
+/* Seletor Atendimento/Protocolo e Fala/Sequência. */
+#text-express-app.te-fullscreen-active .te-type-selector,
+#text-express-app.te-fullscreen-active .te-model-kind-selector {
+  margin-left: 22px;
+  margin-right: 22px;
+  gap: 10px;
+}
+
+#text-express-app.te-fullscreen-active .te-type-selector legend,
+#text-express-app.te-fullscreen-active .te-model-kind-selector legend {
+  font-size: 11px;
+}
+
+#text-express-app.te-fullscreen-active .te-type-selector span,
+#text-express-app.te-fullscreen-active .te-model-kind-selector span {
+  min-height: 42px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+/* ==========================================================
+   Editor de modelos e sequências
+   ========================================================== */
+
+#text-express-app.te-fullscreen-active #te-snippet-form {
+  overflow-y: auto;
+  scrollbar-width: auto;
+  scrollbar-color:
+    color-mix(in srgb, var(--te-primary) 52%, var(--te-border))
+    var(--te-surface-2);
+}
+
+#text-express-app.te-fullscreen-active #te-snippet-form::-webkit-scrollbar {
+  width: 12px;
+}
+
+#text-express-app.te-fullscreen-active #te-snippet-form::-webkit-scrollbar-track {
+  background: var(--te-surface-2);
+}
+
+#text-express-app.te-fullscreen-active #te-snippet-form::-webkit-scrollbar-thumb {
+  border: 3px solid var(--te-surface-2);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--te-primary) 52%, var(--te-border));
+}
+
+#text-express-app.te-fullscreen-active .te-flow-editor {
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+}
+
+#text-express-app.te-fullscreen-active .te-flow-editor-heading strong {
+  font-size: 14px;
+}
+
+#text-express-app.te-fullscreen-active .te-flow-editor-heading small {
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+#text-express-app.te-fullscreen-active .te-flow-step-editor {
+  padding: 14px;
+  border-radius: 11px;
+}
+
+#text-express-app.te-fullscreen-active .te-flow-step-editor > header {
+  margin-bottom: 12px;
+}
+
+#text-express-app.te-fullscreen-active .te-flow-step-editor > header strong {
+  font-size: 13px;
+}
+
+#text-express-app.te-fullscreen-active .te-flow-step-editor-number {
+  width: 28px;
+  height: 28px;
+  font-size: 11px;
+}
+
+#text-express-app.te-fullscreen-active .te-flow-step-editor-grid {
+  grid-template-columns: 1.25fr 1fr .72fr;
+  gap: 12px;
+}
+
+#text-express-app.te-fullscreen-active .te-flow-step-editor-grid label > span {
+  font-size: 11px;
+}
+
+#text-express-app.te-fullscreen-active .te-flow-step-editor-grid input,
+#text-express-app.te-fullscreen-active .te-flow-step-editor-grid select {
+  min-height: 40px;
+  padding: 9px 10px;
+  font-size: 13px;
+}
+
+#text-express-app.te-fullscreen-active .te-flow-step-editor-grid textarea {
+  min-height: 125px;
+  padding: 11px;
+  font-size: 14px;
+  line-height: 1.58;
+}
+
+#text-express-app.te-fullscreen-active .te-model-save-status {
+  font-size: 11px;
+}
+
+/* ==========================================================
+   Janela de variáveis
+   ========================================================== */
+
+#text-express-app.te-fullscreen-active .te-variable-help {
+  margin: 0;
+  padding: 18px 22px 8px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+#text-express-app.te-fullscreen-active .te-variable-fields {
+  gap: 14px;
+  padding: 12px 22px 22px;
+}
+
+#text-express-app.te-fullscreen-active .te-variable-fields label {
+  gap: 7px;
+}
+
+#text-express-app.te-fullscreen-active .te-variable-fields label > span {
+  font-size: 12px;
+  font-weight: 750;
+}
+
+#text-express-app.te-fullscreen-active .te-variable-fields input {
+  min-height: 46px;
+  padding: 10px 12px;
+  font-size: 15px;
+}
+
+/* ==========================================================
+   Configurações
+   ========================================================== */
+
+#text-express-app.te-fullscreen-active .te-settings-list {
+  gap: 12px;
+  padding: 18px 22px;
+}
+
+#text-express-app.te-fullscreen-active .te-setting-profile {
+  gap: 12px;
+  padding: 15px 16px;
+}
+
+#text-express-app.te-fullscreen-active .te-setting-profile strong,
+#text-express-app.te-fullscreen-active .te-setting-row strong {
+  font-size: 14px;
+}
+
+#text-express-app.te-fullscreen-active .te-setting-profile small,
+#text-express-app.te-fullscreen-active .te-setting-row small {
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+#text-express-app.te-fullscreen-active .te-setting-profile input {
+  min-height: 44px;
+  padding: 9px 11px;
+  font-size: 14px;
+}
+
+#text-express-app.te-fullscreen-active .te-setting-row {
+  min-height: 68px;
+  padding: 13px 15px;
+}
+
+#text-express-app.te-fullscreen-active .te-setting-row input[type="checkbox"] {
+  width: 21px;
+  height: 21px;
+}
+
+#text-express-app.te-fullscreen-active .te-keyboard-help {
+  margin: 0 22px 18px;
+  padding: 13px 15px;
+  font-size: 12px;
+}
+
+#text-express-app.te-fullscreen-active .te-keyboard-help strong {
+  font-size: 13px;
+}
+
+/* ==========================================================
+   Categorias
+   ========================================================== */
+
+#text-express-app.te-fullscreen-active .te-modal-heading-icon {
+  width: 48px;
+  height: 48px;
+}
+
+#text-express-app.te-fullscreen-active .te-modal-heading-icon .te-icon {
+  width: 24px;
+  height: 24px;
+}
+
+#text-express-app.te-fullscreen-active .te-icon-choice-grid {
+  grid-template-columns: repeat(11, minmax(46px, 1fr));
+  gap: 9px;
+}
+
+#text-express-app.te-fullscreen-active .te-icon-choice {
+  min-height: 48px;
+  border-radius: 11px;
+}
+
+#text-express-app.te-fullscreen-active .te-icon-choice .te-icon {
+  width: 22px;
+  height: 22px;
+}
+
+#text-express-app.te-fullscreen-active #te-category-form-color {
+  width: 58px;
+  height: 48px;
+}
+
+#text-express-app.te-fullscreen-active .te-color-choice {
+  width: 31px;
+  height: 31px;
+}
+
+#text-express-app.te-fullscreen-active .te-color-choice span {
+  width: 21px;
+  height: 21px;
+}
+
+#text-express-app.te-fullscreen-active .te-category-preview {
+  min-height: 42px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+#text-express-app.te-fullscreen-active .te-category-order-actions {
+  padding: 0 22px 18px;
+}
+
+/* ==========================================================
+   Adaptação para telas menores
+   ========================================================== */
+
+@media (max-width: 1100px) {
+  #text-express-app.te-fullscreen-active .te-modal-backdrop {
+    padding: 15px;
+  }
+
+  #text-express-app.te-fullscreen-active .te-modal,
+  #text-express-app.te-fullscreen-active #te-snippet-modal .te-modal,
+  #text-express-app.te-fullscreen-active #te-category-modal .te-modal,
+  #text-express-app.te-fullscreen-active #te-settings-modal .te-modal,
+  #text-express-app.te-fullscreen-active #te-variable-modal .te-modal {
+    width: calc(100vw - 30px);
+    max-height: calc(100vh - 30px);
+  }
+
+  #text-express-app.te-fullscreen-active .te-flow-step-editor-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  #text-express-app.te-fullscreen-active .te-icon-choice-grid {
+    grid-template-columns: repeat(8, minmax(44px, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  #text-express-app.te-fullscreen-active .te-modal-backdrop {
+    padding: 6px;
+  }
+
+  #text-express-app.te-fullscreen-active .te-modal,
+  #text-express-app.te-fullscreen-active #te-snippet-modal .te-modal,
+  #text-express-app.te-fullscreen-active #te-category-modal .te-modal,
+  #text-express-app.te-fullscreen-active #te-settings-modal .te-modal,
+  #text-express-app.te-fullscreen-active #te-variable-modal .te-modal {
+    width: calc(100vw - 12px);
+    max-height: calc(100vh - 12px);
+    border-radius: 10px;
+  }
+
+  #text-express-app.te-fullscreen-active .te-form-grid {
+    padding: 12px;
+  }
+
+  #text-express-app.te-fullscreen-active .te-type-selector,
+  #text-express-app.te-fullscreen-active .te-model-kind-selector {
+    margin-left: 12px;
+    margin-right: 12px;
+  }
+
+  #text-express-app.te-fullscreen-active .te-flow-step-editor-grid,
+  #text-express-app.te-fullscreen-active .te-setting-profile label {
+    grid-template-columns: 1fr;
+  }
+
+  #text-express-app.te-fullscreen-active .te-icon-choice-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+
+  #text-express-app.te-fullscreen-active .te-variable-help,
+  #text-express-app.te-fullscreen-active .te-variable-fields,
+  #text-express-app.te-fullscreen-active .te-settings-list {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
