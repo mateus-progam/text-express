@@ -1,17 +1,18 @@
 /*
- * Text Express 1.0.0
+ * Text Express 2.0.0
  * Expansor de textos para atendimento e registro de protocolos.
  * Sem dependências externas.
  */
 (() => {
   "use strict";
 
-  const APP_VERSION = "1.0.0";
+  const APP_VERSION = "2.0.0";
   const STORAGE_KEYS = Object.freeze({
     snippets: "text_express_snippets",
     darkMode: "te_dark_mode",
     settings: "text_express_settings",
-    position: "text_express_position"
+    position: "text_express_position",
+    categories: "text_express_categories"
   });
 
   const DEFAULT_SETTINGS = Object.freeze({
@@ -20,10 +21,10 @@
     confirmBeforeDelete: true
   });
 
-  const CATEGORY_ORDER = Object.freeze({
-    atendimento: ["Saudações", "Respostas", "Solicitações", "Problemas", "Orientações", "Encerramentos", "Outros"],
-    protocolo: ["Fibra e ONU", "Instalação e Reparo", "Internet", "Wi-Fi e Equipamentos", "Telefonia", "Atendimento e Retorno", "TV", "Sistemas e Aplicativos", "FWA", "Financeiro", "Abertura", "Relato", "Análise", "Procedimento", "Orientação", "Encaminhamento", "Pendência", "Conclusão", "Outros"]
-  });
+  const DEFAULT_CATEGORIES = [{"id":"cat-atd-saudacoes","tipo":"atendimento","nome":"Saudações","icone":"message-circle","cor":"#4f7cff","ordem":10,"padrao":true},{"id":"cat-atd-respostas","tipo":"atendimento","nome":"Respostas","icone":"reply","cor":"#16a36a","ordem":20,"padrao":true},{"id":"cat-atd-solicitacoes","tipo":"atendimento","nome":"Solicitações","icone":"clipboard-list","cor":"#8b5cf6","ordem":30,"padrao":true},{"id":"cat-atd-problemas","tipo":"atendimento","nome":"Problemas","icone":"alert-triangle","cor":"#e64b4b","ordem":40,"padrao":true},{"id":"cat-atd-orientacoes","tipo":"atendimento","nome":"Orientações","icone":"compass","cor":"#0891b2","ordem":50,"padrao":true},{"id":"cat-atd-encerramentos","tipo":"atendimento","nome":"Encerramentos","icone":"check-circle","cor":"#18864b","ordem":60,"padrao":true},{"id":"cat-atd-outros","tipo":"atendimento","nome":"Outros","icone":"folder","cor":"#64748b","ordem":70,"padrao":true},{"id":"cat-prot-fibra-onu","tipo":"protocolo","nome":"Fibra e ONU","icone":"network","cor":"#3b82f6","ordem":10,"padrao":true},{"id":"cat-prot-instalacao-reparo","tipo":"protocolo","nome":"Instalação e Reparo","icone":"wrench","cor":"#f97316","ordem":20,"padrao":true},{"id":"cat-prot-internet","tipo":"protocolo","nome":"Internet","icone":"globe","cor":"#4f46e5","ordem":30,"padrao":true},{"id":"cat-prot-wifi-equipamentos","tipo":"protocolo","nome":"Wi-Fi e Equipamentos","icone":"wifi","cor":"#0891b2","ordem":40,"padrao":true},{"id":"cat-prot-telefonia","tipo":"protocolo","nome":"Telefonia","icone":"phone","cor":"#16a36a","ordem":50,"padrao":true},{"id":"cat-prot-atendimento-retorno","tipo":"protocolo","nome":"Atendimento e Retorno","icone":"users","cor":"#8b5cf6","ordem":60,"padrao":true},{"id":"cat-prot-tv","tipo":"protocolo","nome":"TV","icone":"monitor","cor":"#db2777","ordem":70,"padrao":true},{"id":"cat-prot-sistemas-aplicativos","tipo":"protocolo","nome":"Sistemas e Aplicativos","icone":"server","cor":"#2563eb","ordem":80,"padrao":true},{"id":"cat-prot-fwa","tipo":"protocolo","nome":"FWA","icone":"radio","cor":"#d97706","ordem":90,"padrao":true},{"id":"cat-prot-financeiro","tipo":"protocolo","nome":"Financeiro","icone":"wallet","cor":"#15803d","ordem":100,"padrao":true},{"id":"cat-prot-abertura","tipo":"protocolo","nome":"Abertura","icone":"play-circle","cor":"#2563eb","ordem":110,"padrao":true},{"id":"cat-prot-relato","tipo":"protocolo","nome":"Relato","icone":"file-text","cor":"#7c3aed","ordem":120,"padrao":true},{"id":"cat-prot-analise","tipo":"protocolo","nome":"Análise","icone":"search","cor":"#4f46e5","ordem":130,"padrao":true},{"id":"cat-prot-procedimento","tipo":"protocolo","nome":"Procedimento","icone":"settings","cor":"#f97316","ordem":140,"padrao":true},{"id":"cat-prot-orientacao","tipo":"protocolo","nome":"Orientação","icone":"compass","cor":"#0891b2","ordem":150,"padrao":true},{"id":"cat-prot-encaminhamento","tipo":"protocolo","nome":"Encaminhamento","icone":"send","cor":"#2563eb","ordem":160,"padrao":true},{"id":"cat-prot-pendencia","tipo":"protocolo","nome":"Pendência","icone":"clock","cor":"#d97706","ordem":170,"padrao":true},{"id":"cat-prot-conclusao","tipo":"protocolo","nome":"Conclusão","icone":"check-circle","cor":"#15803d","ordem":180,"padrao":true},{"id":"cat-prot-outros","tipo":"protocolo","nome":"Outros","icone":"folder","cor":"#64748b","ordem":190,"padrao":true}];
+
+  const CATEGORY_ICON_OPTIONS = Object.freeze(["layout-grid", "message-circle", "reply", "clipboard-list", "alert-triangle", "compass", "check-circle", "folder", "network", "wrench", "globe", "wifi", "phone", "users", "monitor", "server", "radio", "wallet", "play-circle", "file-text", "search", "settings", "send", "clock", "tag", "headphones", "shield-check", "database", "smartphone", "package", "map-pin", "bell", "zap"]);
+  const CATEGORY_COLOR_OPTIONS = Object.freeze(["#4f7cff", "#2563eb", "#4f46e5", "#8b5cf6", "#db2777", "#e64b4b", "#f97316", "#d97706", "#16a36a", "#0891b2", "#64748b", "#0f766e"]);
 
   const TRIGGER_LABELS = Object.freeze({
     space: "Espaço",
@@ -53,14 +54,20 @@
       this.variableFields = root.querySelector("#te-variable-fields");
       this.settingsModal = root.querySelector("#te-settings-modal");
       this.settingsForm = root.querySelector("#te-settings-form");
+      this.categoryModal = root.querySelector("#te-category-modal");
+      this.categoryForm = root.querySelector("#te-category-form");
+      this.categoryIconGrid = root.querySelector("#te-category-icon-grid");
+      this.categoryColorGrid = root.querySelector("#te-category-color-grid");
       this.toastStack = root.querySelector("#te-toast-stack");
 
       this.snippets = [];
+      this.categories = [];
       this.settings = { ...DEFAULT_SETTINGS };
       this.activeType = "atendimento";
       this.activeCategory = "Todos";
       this.selectedId = null;
       this.editingId = null;
+      this.editingCategoryId = null;
       this.shortcutMap = new Map();
       this.lastActiveElement = null;
       this.contentEditableRanges = new WeakMap();
@@ -82,6 +89,7 @@
       this.checkStorage();
       this.loadSettings();
       this.loadTheme();
+      this.loadCategories();
       this.loadSnippets();
       this.restorePosition();
       this.setupEvents();
@@ -154,8 +162,8 @@
     applyTheme(enabled) {
       document.body.classList.toggle("te-dark", enabled);
       this.root.classList.toggle("te-dark", enabled);
-      const icon = this.root.querySelector(".te-theme-icon");
-      if (icon) icon.textContent = enabled ? "☀" : "☾";
+      const use = this.root.querySelector(".te-theme-icon use");
+      if (use) use.setAttribute("href", enabled ? "#te-i-sun" : "#te-i-moon");
     }
 
     toggleTheme() {
@@ -163,6 +171,116 @@
       this.applyTheme(enabled);
       this.storageSet(STORAGE_KEYS.darkMode, String(enabled));
       this.showToast(enabled ? "Modo escuro ativado." : "Modo claro ativado.", "success");
+    }
+
+
+    getDefaultCategories() {
+      return DEFAULT_CATEGORIES.map((item) => this.normalizeCategory(item));
+    }
+
+    loadCategories() {
+      const saved = this.storageGet(STORAGE_KEYS.categories);
+      if (!saved) {
+        this.categories = this.getDefaultCategories();
+        this.saveCategories();
+        return;
+      }
+      try {
+        const parsed = JSON.parse(saved);
+        const source = Array.isArray(parsed) ? parsed : parsed && Array.isArray(parsed.categories) ? parsed.categories : null;
+        if (!source) throw new Error("Formato inválido");
+        const seen = new Set();
+        this.categories = source.map((item) => this.normalizeCategory(item)).filter((item) => {
+          if (seen.has(item.id)) return false;
+          seen.add(item.id);
+          return true;
+        });
+        for (const tipo of ["atendimento", "protocolo"]) {
+          if (!this.categories.some((item) => item.tipo === tipo)) {
+            this.categories.push(this.normalizeCategory({ tipo, nome: "Outros", icone: "folder", cor: "#64748b", ordem: 999 }));
+          }
+        }
+        this.sortCategories();
+      } catch (error) {
+        this.categories = this.getDefaultCategories();
+        this.saveCategories();
+      }
+    }
+
+    saveCategories() {
+      this.sortCategories();
+      const payload = {
+        app: "Text Express",
+        schemaVersion: 3,
+        appVersion: APP_VERSION,
+        updatedAt: new Date().toISOString(),
+        categories: this.categories
+      };
+      this.storageSet(STORAGE_KEYS.categories, JSON.stringify(payload));
+    }
+
+    normalizeCategory(raw = {}) {
+      const tipo = raw.tipo === "protocolo" ? "protocolo" : "atendimento";
+      const nome = String(raw.nome || "Nova categoria").trim().slice(0, 48) || "Nova categoria";
+      const icone = CATEGORY_ICON_OPTIONS.includes(raw.icone) ? raw.icone : "folder";
+      const cor = /^#[0-9a-f]{6}$/i.test(String(raw.cor || "")) ? String(raw.cor).toLowerCase() : "#64748b";
+      const ordem = Number.isFinite(Number(raw.ordem)) ? Number(raw.ordem) : 999;
+      return {
+        id: this.isSafeId(raw.id) ? String(raw.id) : this.generateCategoryId(tipo, nome),
+        tipo,
+        nome,
+        icone,
+        cor,
+        ordem,
+        padrao: Boolean(raw.padrao)
+      };
+    }
+
+    generateCategoryId(tipo, nome = "categoria") {
+      const slug = this.slugify(nome).slice(0, 36) || "categoria";
+      const base = `cat-${tipo === "protocolo" ? "prot" : "atd"}-${slug}`;
+      if (!this.categories.some((item) => item.id === base)) return base;
+      return `${base}-${Date.now().toString(36)}`;
+    }
+
+    slugify(value) {
+      return String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    }
+
+    sortCategories() {
+      this.categories.sort((a, b) => a.tipo.localeCompare(b.tipo) || a.ordem - b.ordem || a.nome.localeCompare(b.nome, "pt-BR"));
+    }
+
+    getCategoryById(id) {
+      return this.categories.find((item) => item.id === id) || null;
+    }
+
+    findCategoryByName(nome, tipo) {
+      const normalized = this.normalizeSearchText(nome);
+      return this.categories.find((item) => item.tipo === tipo && this.normalizeSearchText(item.nome) === normalized) || null;
+    }
+
+    resolveCategory(categoryId, categoryName, tipo) {
+      let category = categoryId ? this.getCategoryById(String(categoryId)) : null;
+      if (category && category.tipo !== tipo) category = null;
+      if (!category && categoryName) category = this.findCategoryByName(categoryName, tipo);
+      if (!category) category = this.findCategoryByName("Outros", tipo) || this.getCategoriesForType(tipo)[0] || null;
+      if (!category) {
+        category = this.normalizeCategory({ tipo, nome: categoryName || "Outros", icone: "folder", cor: "#64748b", ordem: 999 });
+        this.categories.push(category);
+        this.saveCategories();
+      }
+      return category;
+    }
+
+    getCategoryForSnippet(snippet) {
+      return this.resolveCategory(snippet.categoriaId, snippet.categoria, snippet.tipo);
+    }
+
+    icon(name, extraClass = "") {
+      const safe = CATEGORY_ICON_OPTIONS.includes(name) || ["plus","edit","trash","copy","star","send","download","upload","rotate-ccw","x","chevron-left","chevron-right","palette","save","info","moon","sun","minus","maximize-2","sliders","heart","check","more-horizontal"].includes(name) ? name : "folder";
+      return `<svg class="te-icon ${this.escapeAttr(extraClass)}" aria-hidden="true"><use href="#te-i-${this.escapeAttr(safe)}"></use></svg>`;
     }
 
     getDefaultSnippets() {
@@ -192,7 +310,7 @@
     saveSnippets() {
       const payload = {
         app: "Text Express",
-        schemaVersion: 2,
+        schemaVersion: 3,
         appVersion: APP_VERSION,
         updatedAt: new Date().toISOString(),
         snippets: this.snippets
@@ -225,7 +343,7 @@
       const tipo = raw.tipo === "protocolo" ? "protocolo" : "atendimento";
       const nome = String(raw.nome || "Modelo sem nome").trim().slice(0, 100);
       const conteudo = String(raw.conteudo || raw.content || "").replace(/\r\n/g, "\n").trim();
-      const categoria = String(raw.categoria || (tipo === "protocolo" ? "Outros" : "Respostas")).trim() || "Outros";
+      const category = this.resolveCategory(raw.categoriaId || raw.categoryId, raw.categoria || raw.category, tipo);
       const atalhoBase = raw.atalho || raw.shortcut || this.suggestShortcutFromName(nome);
       const triggerKey = ["space", "tab", "enter"].includes(raw.triggerKey) ? raw.triggerKey : "space";
       return {
@@ -233,7 +351,8 @@
         tipo,
         nome,
         atalho: this.normalizeShortcut(atalhoBase),
-        categoria,
+        categoriaId: category.id,
+        categoria: category.nome,
         grupo: raw.grupo ? String(raw.grupo).slice(0, 80) : "",
         contexto: raw.contexto ? String(raw.contexto).slice(0, 120) : "",
         conteudo,
@@ -288,8 +407,10 @@
     setupEvents() {
       this.root.addEventListener("click", (event) => this.handleRootClick(event));
       this.root.addEventListener("change", (event) => this.handleRootChange(event));
+      this.root.addEventListener("input", (event) => this.handleRootInput(event));
       this.searchInput.addEventListener("input", () => this.renderSnippets());
       this.snippetForm.addEventListener("submit", (event) => this.saveSnippet(event));
+      this.categoryForm.addEventListener("submit", (event) => this.saveCategory(event));
       this.variableForm.addEventListener("submit", (event) => this.submitVariables(event));
       this.settingsForm.addEventListener("submit", (event) => this.submitSettings(event));
       this.importInput.addEventListener("change", (event) => this.handleImportFile(event));
@@ -325,6 +446,51 @@
         return;
       }
 
+      const actionButton = event.target.closest("[data-te-action]");
+      const card = event.target.closest("[data-te-card-id]");
+      if (actionButton) {
+        const action = actionButton.dataset.teAction;
+        const id = actionButton.dataset.teId || (card && card.dataset.teCardId) || null;
+        const categoryId = actionButton.dataset.teCategoryId || null;
+        const iconName = actionButton.dataset.teIconName || null;
+        const color = actionButton.dataset.teColor || null;
+        const actions = {
+          theme: () => this.toggleTheme(),
+          minimize: () => this.toggleMinimize(),
+          close: () => this.closeApp(),
+          reopen: () => this.openApp(),
+          new: () => this.openModal(),
+          import: () => this.importSnippets(),
+          export: () => this.exportSnippets(),
+          reset: () => this.resetSnippets(),
+          settings: () => this.openSettings(),
+          "settings-close": () => this.closeSettings(),
+          "modal-close": () => this.closeModal(),
+          "suggest-shortcut": () => this.applySuggestedShortcut(),
+          "variable-cancel": () => this.finishVariablePrompt(null),
+          insert: () => this.insertSnippet(id),
+          copy: () => this.copySnippet(id),
+          edit: () => this.editSnippet(id),
+          delete: () => this.deleteSnippet(id),
+          favorite: () => this.toggleFavorite(id),
+          "category-new": () => this.openCategoryModal(),
+          "category-add-from-form": () => this.openCategoryModal(null, this.root.querySelector('input[name="te-type"]:checked')?.value || "atendimento", true),
+          "category-edit": () => this.openCategoryModal(this.getCategoryById(categoryId)),
+          "category-close": () => this.closeCategoryModal(),
+          "category-delete": () => this.deleteCategory(this.editingCategoryId),
+          "category-move-left": () => this.moveCategory(this.editingCategoryId, -1),
+          "category-move-right": () => this.moveCategory(this.editingCategoryId, 1),
+          "category-icon": () => this.selectCategoryIcon(iconName),
+          "category-color": () => this.selectCategoryColor(color)
+        };
+        if (actions[action]) {
+          event.preventDefault();
+          event.stopPropagation();
+          actions[action]();
+          return;
+        }
+      }
+
       const categoryButton = event.target.closest("[data-te-category]");
       if (categoryButton) {
         this.activeCategory = categoryButton.dataset.teCategory;
@@ -334,43 +500,9 @@
         return;
       }
 
-      const card = event.target.closest("[data-te-card-id]");
-      const actionButton = event.target.closest("[data-te-action]");
-      if (card && !actionButton) {
+      if (card) {
         this.selectedId = card.dataset.teCardId;
         this.renderSnippets();
-        return;
-      }
-
-      if (!actionButton) return;
-      const action = actionButton.dataset.teAction;
-      const id = actionButton.dataset.teId || (card && card.dataset.teCardId) || null;
-
-      const actions = {
-        theme: () => this.toggleTheme(),
-        minimize: () => this.toggleMinimize(),
-        close: () => this.closeApp(),
-        reopen: () => this.openApp(),
-        new: () => this.openModal(),
-        import: () => this.importSnippets(),
-        export: () => this.exportSnippets(),
-        reset: () => this.resetSnippets(),
-        settings: () => this.openSettings(),
-        "settings-close": () => this.closeSettings(),
-        "modal-close": () => this.closeModal(),
-        "suggest-shortcut": () => this.applySuggestedShortcut(),
-        "variable-cancel": () => this.finishVariablePrompt(null),
-        insert: () => this.insertSnippet(id),
-        copy: () => this.copySnippet(id),
-        edit: () => this.editSnippet(id),
-        delete: () => this.deleteSnippet(id),
-        favorite: () => this.toggleFavorite(id)
-      };
-
-      if (actions[action]) {
-        event.preventDefault();
-        event.stopPropagation();
-        actions[action]();
       }
     }
 
@@ -378,7 +510,18 @@
       if (event.target.matches('input[name="te-type"]')) {
         this.updateCategoryOptions(event.target.value);
       }
+      if (event.target.matches('input[name="te-category-type"]')) {
+        this.updateCategoryPreview();
+      }
+      if (event.target.id === "te-category-form-color") {
+        this.selectCategoryColor(event.target.value);
+      }
     }
+
+    handleRootInput(event) {
+      if (event.target.id === "te-category-form-name") this.updateCategoryPreview();
+    }
+
 
     render() {
       this.root.querySelectorAll("[data-te-type]").forEach((button) => {
@@ -390,23 +533,46 @@
     }
 
     getCategoriesForType(type) {
-      let relevant;
-      if (type === "favoritos") relevant = this.snippets.filter((item) => item.favorito);
-      else relevant = this.snippets.filter((item) => item.tipo === type);
-
-      const present = [...new Set(relevant.map((item) => item.categoria).filter(Boolean))];
-      const base = type === "favoritos" ? [...CATEGORY_ORDER.atendimento, ...CATEGORY_ORDER.protocolo] : [...(CATEGORY_ORDER[type] || [])];
-      return [...new Set([...base, ...present])].filter((category) => present.includes(category));
+      let ids = null;
+      if (type === "favoritos") {
+        ids = new Set(this.snippets.filter((item) => item.favorito && item.ativo).map((item) => item.categoriaId));
+      }
+      return this.categories
+        .filter((category) => type === "favoritos" ? ids.has(category.id) : category.tipo === type)
+        .sort((a, b) => a.ordem - b.ordem || a.nome.localeCompare(b.nome, "pt-BR"));
     }
 
     renderCategories() {
-      const categories = ["Todos", ...this.getCategoriesForType(this.activeType)];
-      if (!categories.includes(this.activeCategory)) this.activeCategory = "Todos";
-      this.categoryBar.innerHTML = categories.map((category) => `
-        <button type="button" class="te-category-button ${category === this.activeCategory ? "te-active" : ""}" data-te-category="${this.escapeAttr(category)}">
-          ${this.escapeHtml(category)}
-        </button>
-      `).join("");
+      const categories = this.getCategoriesForType(this.activeType);
+      const visibleItems = this.snippets.filter((item) => item.ativo && (this.activeType === "favoritos" ? item.favorito : item.tipo === this.activeType));
+      const allCount = visibleItems.length;
+      if (this.activeCategory !== "Todos" && !categories.some((item) => item.id === this.activeCategory)) this.activeCategory = "Todos";
+
+      const categoryHtml = categories.map((category) => {
+        const count = visibleItems.filter((item) => item.categoriaId === category.id).length;
+        return `
+          <div class="te-category-chip ${category.id === this.activeCategory ? "te-active" : ""}" style="--te-category-color:${this.escapeAttr(category.cor)}">
+            <button type="button" class="te-category-button" data-te-category="${this.escapeAttr(category.id)}" title="Filtrar por ${this.escapeAttr(category.nome)}">
+              ${this.icon(category.icone)}
+              <span>${this.escapeHtml(category.nome)}</span>
+              <span class="te-category-count">${count}</span>
+            </button>
+            <button type="button" class="te-category-edit" data-te-action="category-edit" data-te-category-id="${this.escapeAttr(category.id)}" title="Editar categoria" aria-label="Editar categoria ${this.escapeAttr(category.nome)}">
+              ${this.icon("edit")}
+            </button>
+          </div>`;
+      }).join("");
+
+      this.categoryBar.innerHTML = `
+        <div class="te-category-chip te-category-all ${this.activeCategory === "Todos" ? "te-active" : ""}" style="--te-category-color:var(--te-primary)">
+          <button type="button" class="te-category-button" data-te-category="Todos">
+            ${this.icon("layout-grid")}<span>Todos</span><span class="te-category-count">${allCount}</span>
+          </button>
+        </div>
+        ${categoryHtml}
+        <button type="button" class="te-category-add-button" data-te-action="category-new" title="Adicionar categoria">
+          ${this.icon("plus")}<span>Categoria</span>
+        </button>`;
     }
 
     getFilteredSnippets() {
@@ -415,15 +581,11 @@
         if (!snippet.ativo) return false;
         const matchesType = this.activeType === "favoritos" ? snippet.favorito : snippet.tipo === this.activeType;
         if (!matchesType) return false;
-        if (this.activeCategory !== "Todos" && snippet.categoria !== this.activeCategory) return false;
+        if (this.activeCategory !== "Todos" && snippet.categoriaId !== this.activeCategory) return false;
         if (!query) return true;
+        const category = this.getCategoryForSnippet(snippet);
         const haystack = this.normalizeSearchText([
-          snippet.nome,
-          snippet.atalho,
-          snippet.conteudo,
-          snippet.categoria,
-          snippet.grupo,
-          snippet.contexto
+          snippet.nome, snippet.atalho, snippet.conteudo, category.nome, snippet.grupo, snippet.contexto
         ].join(" "));
         return haystack.includes(query);
       });
@@ -445,79 +607,63 @@
 
     renderCard(snippet) {
       const selected = snippet.id === this.selectedId ? "te-selected" : "";
-      const icon = snippet.tipo === "protocolo" ? "▤" : "💬";
+      const category = this.getCategoryForSnippet(snippet);
       return `
-        <article class="te-snippet-card ${selected}" data-te-card-id="${this.escapeAttr(snippet.id)}" data-te-snippet-type="${snippet.tipo}">
-          <span class="te-card-icon" aria-hidden="true">${icon}</span>
+        <article class="te-snippet-card ${selected}" data-te-card-id="${this.escapeAttr(snippet.id)}" data-te-snippet-type="${snippet.tipo}" style="--te-card-accent:${this.escapeAttr(category.cor)}">
+          <span class="te-card-icon" aria-hidden="true" style="--te-category-color:${this.escapeAttr(category.cor)}">${this.icon(category.icone)}</span>
           <div class="te-card-main">
             <div class="te-card-title-row">
               <span class="te-card-title" title="${this.escapeAttr(snippet.nome)}">${this.escapeHtml(snippet.nome)}</span>
-              <span class="te-category-tag" title="${this.escapeAttr(snippet.categoria)}">${this.escapeHtml(snippet.categoria)}</span>
+              <span class="te-category-tag" title="${this.escapeAttr(category.nome)}" style="--te-category-color:${this.escapeAttr(category.cor)}">${this.icon(category.icone)}${this.escapeHtml(category.nome)}</span>
             </div>
             <div class="te-shortcut-line">
               <code>${this.escapeHtml(snippet.atalho)}</code>
-              <span>+ ${this.escapeHtml(TRIGGER_LABELS[snippet.triggerKey] || "Espaço")}</span>
+              <span>${this.icon("play-circle")} ${this.escapeHtml(TRIGGER_LABELS[snippet.triggerKey] || "Espaço")}</span>
             </div>
             <p class="te-card-excerpt">${this.escapeHtml(snippet.conteudo)}</p>
             <div class="te-card-actions">
-              <button class="te-text-button" type="button" data-te-action="edit" data-te-id="${this.escapeAttr(snippet.id)}">✎ Editar</button>
-              <button class="te-text-button te-delete" type="button" data-te-action="delete" data-te-id="${this.escapeAttr(snippet.id)}">♲ Excluir</button>
-              <button class="te-text-button te-card-insert" type="button" data-te-action="insert" data-te-id="${this.escapeAttr(snippet.id)}">➤ Inserir</button>
+              <button class="te-text-button" type="button" data-te-action="edit" data-te-id="${this.escapeAttr(snippet.id)}">${this.icon("edit")} Editar</button>
+              <button class="te-text-button te-delete" type="button" data-te-action="delete" data-te-id="${this.escapeAttr(snippet.id)}">${this.icon("trash")} Excluir</button>
+              <button class="te-text-button te-card-insert" type="button" data-te-action="insert" data-te-id="${this.escapeAttr(snippet.id)}">${this.icon("send")} Inserir</button>
             </div>
           </div>
-          <button class="te-favorite-button ${snippet.favorito ? "te-active" : ""}" type="button" data-te-action="favorite" data-te-id="${this.escapeAttr(snippet.id)}" title="${snippet.favorito ? "Remover dos favoritos" : "Adicionar aos favoritos"}" aria-label="${snippet.favorito ? "Remover dos favoritos" : "Adicionar aos favoritos"}">★</button>
-        </article>
-      `;
+          <button class="te-favorite-button ${snippet.favorito ? "te-active" : ""}" type="button" data-te-action="favorite" data-te-id="${this.escapeAttr(snippet.id)}" title="${snippet.favorito ? "Remover dos favoritos" : "Adicionar aos favoritos"}" aria-label="${snippet.favorito ? "Remover dos favoritos" : "Adicionar aos favoritos"}">${this.icon("star")}</button>
+        </article>`;
     }
 
     renderDetail(snippet) {
       if (!snippet) {
         this.detailPane.removeAttribute("data-te-snippet-type");
-        this.detailPane.innerHTML = `
-          <div class="te-detail-empty">
-            <span aria-hidden="true">⚡</span>
-            <strong>Selecione um modelo</strong>
-            <p>Veja o conteúdo completo, as variáveis e o atalho de ativação.</p>
-          </div>`;
+        this.detailPane.innerHTML = `<div class="te-detail-empty">${this.icon("zap")}<strong>Selecione um modelo</strong><p>Veja o conteúdo completo, as variáveis e o atalho de ativação.</p></div>`;
         return;
       }
-
+      const category = this.getCategoryForSnippet(snippet);
       this.detailPane.dataset.teSnippetType = snippet.tipo;
+      this.detailPane.style.setProperty("--te-detail-accent", category.cor);
       const variableHtml = snippet.variaveis.length
-        ? snippet.variaveis.map((variable) => `<span class="te-variable-tag">${this.escapeHtml(variable)}</span>`).join("")
+        ? snippet.variaveis.map((variable) => `<span class="te-variable-tag">${this.icon("tag")}${this.escapeHtml(variable)}</span>`).join("")
         : '<span class="te-muted">Nenhuma variável encontrada.</span>';
-
       this.detailPane.innerHTML = `
         <div class="te-detail-header">
-          <div>
-            <h2>${this.escapeHtml(snippet.nome)}</h2>
-            <div class="te-detail-meta">
-              <span class="te-category-tag">${this.escapeHtml(snippet.categoria)}</span>
+          <div class="te-detail-title-wrap">
+            <span class="te-detail-category-icon" style="--te-category-color:${this.escapeAttr(category.cor)}">${this.icon(category.icone)}</span>
+            <div><h2>${this.escapeHtml(snippet.nome)}</h2><div class="te-detail-meta">
+              <span class="te-category-tag" style="--te-category-color:${this.escapeAttr(category.cor)}">${this.icon(category.icone)}${this.escapeHtml(category.nome)}</span>
               <code class="te-detail-shortcut">${this.escapeHtml(snippet.atalho)}</code>
               <span class="te-muted">+ ${this.escapeHtml(TRIGGER_LABELS[snippet.triggerKey] || "Espaço")}</span>
-            </div>
+            </div></div>
           </div>
-          <button class="te-favorite-button ${snippet.favorito ? "te-active" : ""}" type="button" data-te-action="favorite" data-te-id="${this.escapeAttr(snippet.id)}" title="Favorito">★</button>
+          <button class="te-favorite-button ${snippet.favorito ? "te-active" : ""}" type="button" data-te-action="favorite" data-te-id="${this.escapeAttr(snippet.id)}" title="Favorito">${this.icon("star")}</button>
         </div>
-        <section class="te-detail-section">
-          <strong>Conteúdo</strong>
-          <div class="te-content-preview">${this.escapeHtml(snippet.conteudo)}</div>
-        </section>
-        <section class="te-detail-section">
-          <strong>Variáveis detectadas</strong>
-          <div class="te-variable-tags">${variableHtml}</div>
-        </section>
-        <section class="te-detail-section te-how-to">
-          <strong>Como usar</strong><br>
-          Digite <code>${this.escapeHtml(snippet.atalho)}</code> e pressione <strong>${this.escapeHtml(TRIGGER_LABELS[snippet.triggerKey] || "Espaço")}</strong>, ou clique em “Inserir” para enviar ao último campo de texto selecionado.
-        </section>
+        <section class="te-detail-section"><strong>${this.icon("file-text")} Conteúdo</strong><div class="te-content-preview">${this.escapeHtml(snippet.conteudo)}</div></section>
+        <section class="te-detail-section"><strong>${this.icon("tag")} Variáveis detectadas</strong><div class="te-variable-tags">${variableHtml}</div></section>
+        <section class="te-detail-section te-how-to"><strong>${this.icon("info")} Como usar</strong><br>Digite <code>${this.escapeHtml(snippet.atalho)}</code> e pressione <strong>${this.escapeHtml(TRIGGER_LABELS[snippet.triggerKey] || "Espaço")}</strong>, ou clique em “Inserir”.</section>
         <div class="te-detail-actions">
-          <button class="te-primary-button" type="button" data-te-action="insert" data-te-id="${this.escapeAttr(snippet.id)}">➤ Inserir no campo ativo</button>
-          <button class="te-secondary-button" type="button" data-te-action="copy" data-te-id="${this.escapeAttr(snippet.id)}">⧉ Copiar</button>
-          <button class="te-secondary-button" type="button" data-te-action="edit" data-te-id="${this.escapeAttr(snippet.id)}">✎ Editar</button>
-          <button class="te-danger-button" type="button" data-te-action="delete" data-te-id="${this.escapeAttr(snippet.id)}">♲ Excluir</button>
-        </div>
-      `;
+          <button class="te-primary-button" type="button" data-te-action="insert" data-te-id="${this.escapeAttr(snippet.id)}">${this.icon("send")} Inserir no campo ativo</button>
+          <button class="te-secondary-button" type="button" data-te-action="copy" data-te-id="${this.escapeAttr(snippet.id)}">${this.icon("copy")} Copiar</button>
+          <button class="te-secondary-button" type="button" data-te-action="edit" data-te-id="${this.escapeAttr(snippet.id)}">${this.icon("edit")} Editar</button>
+          <button class="te-danger-button" type="button" data-te-action="delete" data-te-id="${this.escapeAttr(snippet.id)}">${this.icon("trash")} Excluir</button>
+        </div>`;
     }
 
     updateCount() {
@@ -534,16 +680,14 @@
       this.root.querySelector("#te-modal-kicker").textContent = data ? "Editar modelo" : "Novo modelo";
       this.root.querySelector("#te-modal-title").textContent = data ? "Editar modelo" : "Criar modelo";
       this.root.querySelector("#te-form-id").value = data ? data.id : "";
-      this.root.querySelectorAll('input[name="te-type"]').forEach((input) => {
-        input.checked = input.value === type;
-      });
+      this.root.querySelectorAll('input[name="te-type"]').forEach((input) => input.checked = input.value === type);
       this.root.querySelector("#te-form-name").value = data ? data.nome : "";
       this.root.querySelector("#te-form-shortcut").value = data ? data.atalho : "";
       this.root.querySelector("#te-form-trigger").value = data ? data.triggerKey : "space";
       this.root.querySelector("#te-form-content").value = data ? data.conteudo : "";
       this.root.querySelector("#te-form-favorite").checked = data ? data.favorito : false;
       this.clearFormErrors();
-      this.updateCategoryOptions(type, data ? data.categoria : null);
+      this.updateCategoryOptions(type, data ? data.categoriaId : null);
       this.detectVariables(data ? data.conteudo : "");
       this.snippetModal.classList.remove("te-hidden");
       window.setTimeout(() => this.root.querySelector("#te-form-name").focus(), 30);
@@ -558,11 +702,10 @@
 
     updateCategoryOptions(type, selected = null) {
       const field = this.root.querySelector("#te-form-category");
-      const existing = [...new Set(this.snippets.filter((item) => item.tipo === type).map((item) => item.categoria))];
-      const categories = [...new Set([...(CATEGORY_ORDER[type] || []), ...existing])];
-      const desired = selected || field.value || categories[0] || "Outros";
-      field.innerHTML = categories.map((category) => `<option value="${this.escapeAttr(category)}">${this.escapeHtml(category)}</option>`).join("");
-      field.value = categories.includes(desired) ? desired : categories[0];
+      const categories = this.getCategoriesForType(type);
+      const desired = selected || field.value || categories[0]?.id;
+      field.innerHTML = categories.map((category) => `<option value="${this.escapeAttr(category.id)}">${this.escapeHtml(category.nome)}</option>`).join("");
+      field.value = categories.some((category) => category.id === desired) ? desired : (categories[0]?.id || "");
     }
 
     clearFormErrors() {
@@ -580,57 +723,156 @@
       event.preventDefault();
       this.clearFormErrors();
       const id = this.root.querySelector("#te-form-id").value;
-      const typeInput = this.root.querySelector('input[name="te-type"]:checked');
-      const tipo = typeInput ? typeInput.value : "atendimento";
+      const tipo = this.root.querySelector('input[name="te-type"]:checked')?.value || "atendimento";
       const nome = this.root.querySelector("#te-form-name").value.trim();
       const atalho = this.normalizeShortcut(this.root.querySelector("#te-form-shortcut").value);
       const triggerKey = this.root.querySelector("#te-form-trigger").value;
-      const categoria = this.root.querySelector("#te-form-category").value;
+      const categoriaId = this.root.querySelector("#te-form-category").value;
+      const category = this.getCategoryById(categoriaId) || this.resolveCategory(null, "Outros", tipo);
       const conteudo = this.root.querySelector("#te-form-content").value.trim();
       const favorito = this.root.querySelector("#te-form-favorite").checked;
-
       let valid = true;
-      if (!nome) {
-        this.setFormError("name", "Informe um nome para o modelo.");
-        valid = false;
-      }
-      if (!conteudo) {
-        this.setFormError("content", "Informe o conteúdo que será inserido.");
-        valid = false;
-      }
+      if (!nome) { this.setFormError("name", "Informe um nome para o modelo."); valid = false; }
+      if (!conteudo) { this.setFormError("content", "Informe o conteúdo que será inserido."); valid = false; }
       const duplicate = this.snippets.find((item) => item.id !== id && item.atalho === atalho);
-      if (duplicate) {
-        this.setFormError("shortcut", `Esse atalho já pertence ao modelo “${duplicate.nome}”.`);
-        valid = false;
-      }
+      if (duplicate) { this.setFormError("shortcut", `Esse atalho já pertence ao modelo “${duplicate.nome}”.`); valid = false; }
       if (!valid) return;
-
       const existingIndex = id ? this.snippets.findIndex((item) => item.id === id) : -1;
       const base = existingIndex >= 0 ? this.snippets[existingIndex] : {};
-      const snippet = this.normalizeSnippet({
-        ...base,
-        id: existingIndex >= 0 ? id : this.generateId(tipo),
-        tipo,
-        nome,
-        atalho,
-        triggerKey,
-        categoria,
-        conteudo,
-        favorito,
-        ativo: true,
-        origem: existingIndex >= 0 ? base.origem : "Criado pelo usuário"
-      });
-
-      if (existingIndex >= 0) this.snippets.splice(existingIndex, 1, snippet);
-      else this.snippets.unshift(snippet);
-
+      const snippet = this.normalizeSnippet({ ...base, id: existingIndex >= 0 ? id : this.generateId(tipo), tipo, nome, atalho, triggerKey, categoriaId: category.id, categoria: category.nome, conteudo, favorito, ativo: true, origem: existingIndex >= 0 ? base.origem : "Criado pelo usuário" });
+      if (existingIndex >= 0) this.snippets.splice(existingIndex, 1, snippet); else this.snippets.unshift(snippet);
       this.saveSnippets();
-      this.activeType = tipo;
-      this.activeCategory = "Todos";
-      this.selectedId = snippet.id;
-      this.closeModal();
-      this.render();
+      this.activeType = tipo; this.activeCategory = "Todos"; this.selectedId = snippet.id;
+      this.closeModal(); this.render();
       this.showToast(existingIndex >= 0 ? "Modelo atualizado com sucesso." : "Modelo criado com sucesso.", "success");
+    }
+
+
+    openCategoryModal(category = null, forcedType = null, returnToSnippet = false) {
+      const type = category?.tipo || forcedType || (this.activeType === "protocolo" ? "protocolo" : "atendimento");
+      this.editingCategoryId = category?.id || null;
+      this.categoryModal.dataset.returnToSnippet = returnToSnippet ? "true" : "false";
+      this.root.querySelector("#te-category-modal-kicker").textContent = category ? "Personalizar categoria" : "Nova categoria";
+      this.root.querySelector("#te-category-modal-title").textContent = category ? "Editar categoria" : "Criar categoria";
+      this.root.querySelector("#te-category-form-id").value = category?.id || "";
+      this.root.querySelector("#te-category-form-name").value = category?.nome || "";
+      this.root.querySelector("#te-category-form-icon").value = category?.icone || "folder";
+      this.root.querySelector("#te-category-form-color").value = category?.cor || CATEGORY_COLOR_OPTIONS[0];
+      this.root.querySelectorAll('input[name="te-category-type"]').forEach((input) => {
+        input.checked = input.value === type;
+        input.disabled = Boolean(category && this.getCategoryUsage(category.id) > 0);
+      });
+      const usage = category ? this.getCategoryUsage(category.id) : 0;
+      this.root.querySelector("#te-category-usage").textContent = category ? `${usage} modelo(s) usando esta categoria.` : "A categoria será salva no navegador.";
+      this.root.querySelector("#te-category-delete-button").classList.toggle("te-hidden", !category);
+      this.root.querySelector("#te-category-move-left").classList.toggle("te-hidden", !category);
+      this.root.querySelector("#te-category-move-right").classList.toggle("te-hidden", !category);
+      this.renderCategoryChoices();
+      this.updateCategoryPreview();
+      this.categoryModal.classList.remove("te-hidden");
+      window.setTimeout(() => this.root.querySelector("#te-category-form-name").focus(), 30);
+    }
+
+    closeCategoryModal() {
+      this.categoryModal.classList.add("te-hidden");
+      this.editingCategoryId = null;
+    }
+
+    renderCategoryChoices() {
+      const selectedIcon = this.root.querySelector("#te-category-form-icon").value || "folder";
+      const selectedColor = this.root.querySelector("#te-category-form-color").value || CATEGORY_COLOR_OPTIONS[0];
+      this.categoryIconGrid.innerHTML = CATEGORY_ICON_OPTIONS.map((name) => `<button type="button" class="te-icon-choice ${name === selectedIcon ? "te-active" : ""}" data-te-action="category-icon" data-te-icon-name="${this.escapeAttr(name)}" title="${this.escapeAttr(name)}">${this.icon(name)}</button>`).join("");
+      this.categoryColorGrid.innerHTML = CATEGORY_COLOR_OPTIONS.map((color) => `<button type="button" class="te-color-choice ${color.toLowerCase() === selectedColor.toLowerCase() ? "te-active" : ""}" data-te-action="category-color" data-te-color="${this.escapeAttr(color)}" style="--te-choice-color:${this.escapeAttr(color)}" title="${this.escapeAttr(color)}"><span></span></button>`).join("");
+    }
+
+    selectCategoryIcon(name) {
+      if (!CATEGORY_ICON_OPTIONS.includes(name)) return;
+      this.root.querySelector("#te-category-form-icon").value = name;
+      this.renderCategoryChoices();
+      this.updateCategoryPreview();
+    }
+
+    selectCategoryColor(color) {
+      if (!/^#[0-9a-f]{6}$/i.test(String(color || ""))) return;
+      this.root.querySelector("#te-category-form-color").value = color;
+      this.renderCategoryChoices();
+      this.updateCategoryPreview();
+    }
+
+    updateCategoryPreview() {
+      const name = this.root.querySelector("#te-category-form-name").value.trim() || "Nome da categoria";
+      const icon = this.root.querySelector("#te-category-form-icon").value || "folder";
+      const color = this.root.querySelector("#te-category-form-color").value || CATEGORY_COLOR_OPTIONS[0];
+      const preview = this.root.querySelector("#te-category-preview");
+      preview.style.setProperty("--te-category-color", color);
+      preview.innerHTML = `${this.icon(icon)}<span>${this.escapeHtml(name)}</span><span class="te-category-count">0</span>`;
+    }
+
+    saveCategory(event) {
+      event.preventDefault();
+      const id = this.root.querySelector("#te-category-form-id").value;
+      const existing = id ? this.getCategoryById(id) : null;
+      const tipo = existing?.tipo || this.root.querySelector('input[name="te-category-type"]:checked')?.value || "atendimento";
+      const nome = this.root.querySelector("#te-category-form-name").value.trim();
+      const icone = this.root.querySelector("#te-category-form-icon").value;
+      const cor = this.root.querySelector("#te-category-form-color").value;
+      const error = this.root.querySelector("#te-category-name-error");
+      error.textContent = "";
+      if (!nome) { error.textContent = "Informe o nome da categoria."; return; }
+      const duplicate = this.categories.find((item) => item.id !== id && item.tipo === tipo && this.normalizeSearchText(item.nome) === this.normalizeSearchText(nome));
+      if (duplicate) { error.textContent = "Já existe uma categoria com esse nome neste tipo."; return; }
+      let category;
+      if (existing) {
+        existing.nome = nome; existing.icone = CATEGORY_ICON_OPTIONS.includes(icone) ? icone : "folder"; existing.cor = cor;
+        category = existing;
+      } else {
+        const maxOrder = Math.max(0, ...this.categories.filter((item) => item.tipo === tipo).map((item) => item.ordem));
+        category = this.normalizeCategory({ id: this.generateCategoryId(tipo, nome), tipo, nome, icone, cor, ordem: maxOrder + 10, padrao: false });
+        this.categories.push(category);
+      }
+      this.snippets.forEach((snippet) => { if (snippet.categoriaId === category.id) snippet.categoria = category.nome; });
+      this.saveCategories(); this.saveSnippets();
+      const returnToSnippet = this.categoryModal.dataset.returnToSnippet === "true";
+      this.closeCategoryModal();
+      if (returnToSnippet && !this.snippetModal.classList.contains("te-hidden")) this.updateCategoryOptions(tipo, category.id);
+      this.activeType = tipo; this.activeCategory = category.id; this.render();
+      this.showToast(existing ? "Categoria atualizada." : "Categoria criada.", "success");
+    }
+
+    getCategoryUsage(categoryId) {
+      return this.snippets.filter((item) => item.categoriaId === categoryId).length;
+    }
+
+    deleteCategory(id) {
+      const category = this.getCategoryById(id);
+      if (!category) return;
+      const usage = this.getCategoryUsage(id);
+      const message = usage ? `Excluir “${category.nome}”? ${usage} modelo(s) serão movidos para “Outros”.` : `Excluir a categoria “${category.nome}”?`;
+      if (!window.confirm(message)) return;
+      let fallback = this.categories.find((item) => item.tipo === category.tipo && item.id !== id && this.normalizeSearchText(item.nome) === "outros");
+      if (!fallback) fallback = this.categories.find((item) => item.tipo === category.tipo && item.id !== id);
+      if (!fallback) {
+        fallback = this.normalizeCategory({ tipo: category.tipo, nome: "Outros", icone: "folder", cor: "#64748b", ordem: 999 });
+        this.categories.push(fallback);
+      }
+      this.snippets.forEach((snippet) => { if (snippet.categoriaId === id) { snippet.categoriaId = fallback.id; snippet.categoria = fallback.nome; } });
+      this.categories = this.categories.filter((item) => item.id !== id);
+      if (this.activeCategory === id) this.activeCategory = "Todos";
+      this.saveCategories(); this.saveSnippets(); this.closeCategoryModal(); this.render();
+      this.showToast("Categoria excluída e modelos reorganizados.", "success");
+    }
+
+    moveCategory(id, direction) {
+      const category = this.getCategoryById(id);
+      if (!category) return;
+      const list = this.getCategoriesForType(category.tipo);
+      const index = list.findIndex((item) => item.id === id);
+      const targetIndex = index + direction;
+      if (index < 0 || targetIndex < 0 || targetIndex >= list.length) return;
+      const target = list[targetIndex];
+      const temp = category.ordem; category.ordem = target.ordem; target.ordem = temp;
+      this.saveCategories(); this.renderCategories();
+      this.showToast(direction < 0 ? "Categoria movida para a esquerda." : "Categoria movida para a direita.", "success");
     }
 
     editSnippet(id) {
@@ -1048,54 +1290,38 @@
     async handleImportFile(event) {
       const file = event.target.files && event.target.files[0];
       if (!file) return;
-      if (file.size > 8 * 1024 * 1024) {
-        this.showToast("O arquivo excede o limite de 8 MB.", "error");
-        return;
-      }
-
+      if (file.size > 8 * 1024 * 1024) { this.showToast("O arquivo excede o limite de 8 MB.", "error"); return; }
       try {
         const parsed = JSON.parse(await file.text());
         const source = Array.isArray(parsed) ? parsed : parsed && Array.isArray(parsed.snippets) ? parsed.snippets : null;
         if (!source) throw new Error("O JSON não contém uma lista de modelos.");
-
+        if (parsed && Array.isArray(parsed.categories)) {
+          for (const rawCategory of parsed.categories) {
+            const candidate = this.normalizeCategory(rawCategory);
+            const existing = this.findCategoryByName(candidate.nome, candidate.tipo);
+            if (!existing) { candidate.id = this.generateCategoryId(candidate.tipo, candidate.nome); this.categories.push(candidate); }
+          }
+          this.saveCategories();
+        }
         const usedIds = new Set(this.snippets.map((item) => item.id));
         const usedShortcuts = new Set(this.snippets.map((item) => item.atalho));
         const signatures = new Set(this.snippets.map((item) => this.snippetSignature(item)));
-        let imported = 0;
-        let skipped = 0;
-        let renamed = 0;
-
+        let imported = 0, skipped = 0, renamed = 0;
         for (const raw of source) {
           const item = this.normalizeSnippet(raw);
-          if (!item.nome || !item.conteudo) {
-            skipped += 1;
-            continue;
-          }
+          if (!item.nome || !item.conteudo) { skipped += 1; continue; }
           const signature = this.snippetSignature(item);
-          if (signatures.has(signature)) {
-            skipped += 1;
-            continue;
-          }
+          if (signatures.has(signature)) { skipped += 1; continue; }
           if (usedIds.has(item.id)) item.id = this.generateId(item.tipo);
           const originalShortcut = item.atalho;
           item.atalho = this.makeUniqueShortcut(item.atalho, usedShortcuts);
           if (item.atalho !== originalShortcut) renamed += 1;
-          usedIds.add(item.id);
-          usedShortcuts.add(item.atalho);
-          signatures.add(signature);
-          this.snippets.push(item);
-          imported += 1;
+          usedIds.add(item.id); usedShortcuts.add(item.atalho); signatures.add(signature); this.snippets.push(item); imported += 1;
         }
-
-        this.saveSnippets();
-        this.activeCategory = "Todos";
-        this.render();
+        this.saveSnippets(); this.activeCategory = "Todos"; this.render();
         this.showToast(`${imported} modelo(s) importado(s). ${skipped} ignorado(s)${renamed ? ` e ${renamed} atalho(s) renomeado(s)` : ""}.`, "success", 5500);
-      } catch (error) {
-        this.showToast(`Não foi possível importar: ${error.message}`, "error", 5500);
-      } finally {
-        event.target.value = "";
-      }
+      } catch (error) { this.showToast(`Não foi possível importar: ${error.message}`, "error", 5500); }
+      finally { event.target.value = ""; }
     }
 
     snippetSignature(item) {
@@ -1103,38 +1329,21 @@
     }
 
     exportSnippets() {
-      const payload = {
-        app: "Text Express",
-        schemaVersion: 2,
-        appVersion: APP_VERSION,
-        exportedAt: new Date().toISOString(),
-        total: this.snippets.length,
-        snippets: this.snippets
-      };
+      const payload = { app: "Text Express", schemaVersion: 3, appVersion: APP_VERSION, exportedAt: new Date().toISOString(), total: this.snippets.length, categories: this.categories, snippets: this.snippets };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      const date = new Date().toISOString().slice(0, 10);
-      link.href = url;
-      link.download = `text-express-backup-${date}.json`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      this.showToast("Backup exportado com sucesso.", "success");
+      const url = URL.createObjectURL(blob); const link = document.createElement("a"); const date = new Date().toISOString().slice(0, 10);
+      link.href = url; link.download = `text-express-backup-${date}.json`; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+      this.showToast("Backup completo exportado com categorias e modelos.", "success");
     }
 
     resetSnippets() {
-      const confirmed = window.confirm("Restaurar todos os modelos padrão? Os modelos personalizados serão apagados. Exporte um backup antes, caso necessário.");
+      const confirmed = window.confirm("Restaurar os modelos e categorias padrão? Os itens personalizados serão apagados. Exporte um backup antes, caso necessário.");
       if (!confirmed) return;
+      this.categories = this.getDefaultCategories();
       this.snippets = this.getDefaultSnippets();
-      this.activeType = "atendimento";
-      this.activeCategory = "Todos";
-      this.selectedId = null;
-      this.searchInput.value = "";
-      this.saveSnippets();
-      this.render();
-      this.showToast("Modelos padrão restaurados.", "success");
+      this.activeType = "atendimento"; this.activeCategory = "Todos"; this.selectedId = null; this.searchInput.value = "";
+      this.saveCategories(); this.saveSnippets(); this.render();
+      this.showToast("Modelos e categorias padrão restaurados.", "success");
     }
 
     openSettings() {
@@ -1163,8 +1372,8 @@
     toggleMinimize(forceMinimize = null) {
       const next = forceMinimize === null ? !this.panel.classList.contains("te-minimized") : Boolean(forceMinimize);
       this.panel.classList.toggle("te-minimized", next);
-      const button = this.root.querySelector('[data-te-action="minimize"] span');
-      if (button) button.textContent = next ? "□" : "—";
+      const use = this.root.querySelector('[data-te-action="minimize"] use');
+      if (use) use.setAttribute("href", next ? "#te-i-maximize-2" : "#te-i-minus");
       this.constrainPanel();
     }
 
@@ -1256,12 +1465,10 @@
       if (!this.toastStack) return;
       const toast = document.createElement("div");
       toast.className = `te-toast te-${type}`;
-      toast.textContent = message;
+      const iconName = type === "success" ? "check-circle" : type === "error" ? "alert-triangle" : "info";
+      toast.innerHTML = `${this.icon(iconName)}<span>${this.escapeHtml(message)}</span>`;
       this.toastStack.appendChild(toast);
-      window.setTimeout(() => {
-        toast.classList.add("te-leaving");
-        window.setTimeout(() => toast.remove(), 200);
-      }, duration);
+      window.setTimeout(() => { toast.classList.add("te-leaving"); window.setTimeout(() => toast.remove(), 200); }, duration);
     }
 
     escapeHtml(value) {

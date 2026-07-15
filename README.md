@@ -1,125 +1,54 @@
-# Text Express
+# Text Express 2.0
 
-Ferramenta de expansão de textos para atendimento ao cliente e registro de protocolos, carregada por bookmarklet e sem dependências externas.
+Ferramenta local para **scripts de atendimento** e **registros de protocolo**, com expansão por atalhos personalizados e interface flutuante.
 
-## Conteúdo do projeto
+## Novidades desta versão
 
-- `index.html`: interface completa e página local de demonstração.
-- `styles.css`: estilos isolados pelo prefixo `te-`, com modo claro e escuro.
-- `app.js`: lógica completa, persistência, atalhos, importação/exportação e os modelos iniciais.
-- `bookmarklet.js`: carregador para adicionar aos favoritos do navegador.
+- interface redesenhada com ícones SVG internos, sem bibliotecas externas;
+- categorias com ícone, cor e contador de modelos;
+- botão **+ Categoria** diretamente na faixa de filtros;
+- edição pelo lápis exibido em cada categoria;
+- criação, edição, exclusão e reordenação de categorias;
+- categorias salvas no `localStorage`;
+- ao excluir uma categoria, os modelos são movidos para **Outros**;
+- seletor de categoria também permite criar uma nova categoria durante o cadastro de um modelo;
+- importação e exportação incluem categorias e modelos;
+- base inicial preservada: 211 scripts de atendimento e 105 protocolos.
 
-A base inicial contém **211 scripts de atendimento** e **105 protocolos**, totalizando **316 modelos**.
+## Arquivos
 
-## Teste local
+- `index.html` — interface e página de demonstração;
+- `styles.css` — estilos completos e modo escuro;
+- `app.js` — aplicação, modelos, categorias, atalhos e persistência;
+- `bookmarklet.js` — código para o favorito, configurado para `mateus-progam.github.io/text-express`.
 
-Não abra o arquivo diretamente por `file://` caso o navegador imponha restrições. Na pasta do projeto, execute um servidor local:
+## Atualizar o GitHub
 
-```bash
-python -m http.server 8080
-```
+Envie estes arquivos para a raiz do repositório, substituindo os anteriores:
 
-Depois acesse:
+1. `index.html`
+2. `styles.css`
+3. `app.js`
+4. `bookmarklet.js`
+5. `README.md`
 
-```text
-http://localhost:8080
-```
+Depois, aguarde o GitHub Pages publicar a nova versão e pressione `Ctrl + F5` na página.
 
-No campo demonstrativo, digite `/a-saudacao-01` e pressione Espaço.
+## Categorias
 
-## Publicação no GitHub Pages
+Na faixa abaixo da busca:
 
-1. Crie um repositório, por exemplo, `text-express`.
-2. Envie `index.html`, `styles.css`, `app.js` e `bookmarklet.js` para a raiz.
-3. No GitHub, abra **Settings → Pages**.
-4. Em **Build and deployment**, selecione **Deploy from a branch**.
-5. Escolha a branch principal e a pasta `/root`.
-6. Aguarde a publicação.
-
-A URL normalmente ficará assim:
-
-```text
-https://SEU_USUARIO.github.io/text-express/
-```
-
-## Configuração do bookmarklet
-
-Abra `bookmarklet.js` e substitua:
-
-```text
-https://SEU_USUARIO.github.io/text-express/
-```
-
-pela URL real do projeto publicado.
-
-Depois:
-
-1. Crie um novo favorito no navegador.
-2. Use o nome `Text Express`.
-3. Cole todo o conteúdo de `bookmarklet.js` no campo de endereço/URL.
-4. Abra o sistema de atendimento e clique no favorito.
-
-## Uso dos atalhos
-
-Cada modelo possui:
-
-- tipo: Atendimento ou Protocolo;
-- nome;
-- atalho escolhido pelo usuário;
-- tecla de ativação: Espaço, Tab ou Enter;
-- categoria;
-- conteúdo;
-- variáveis no formato `[variavel]`.
-
-Exemplo:
-
-```text
-Atalho: /reiniciar
-Ativação: Espaço
-Conteúdo: Por gentileza, desligue os equipamentos da tomada, aguarde 30 segundos e ligue novamente.
-```
-
-Ao digitar `/reiniciar` e pressionar Espaço, o comando é substituído pelo texto completo.
-
-O usuário pode alterar qualquer atalho pelo botão **Editar**. O sistema impede atalhos duplicados.
+- clique em uma categoria para filtrar;
+- passe o mouse e clique no lápis para editar;
+- clique em **+ Categoria** para criar;
+- escolha nome, tipo, ícone e cor;
+- use os botões para mover a categoria para a esquerda ou direita.
 
 ## Armazenamento
 
-Os modelos são gravados no `localStorage` com a chave:
+- modelos: `text_express_snippets`
+- categorias: `text_express_categories`
+- configurações: `text_express_settings`
+- tema: `te_dark_mode`
 
-```text
-text_express_snippets
-```
-
-O modo escuro usa:
-
-```text
-te_dark_mode
-```
-
-O armazenamento pertence ao domínio da página atual. Assim, dados salvos em um sistema podem não aparecer em outro domínio. Use **Exportar** e **Importar** para transportar a base.
-
-## Recursos implementados
-
-- criação, edição, exclusão e listagem;
-- abas separadas para Atendimento, Protocolo e Favoritos;
-- busca por nome, atalho, categoria ou conteúdo;
-- filtros por categoria;
-- atalhos personalizados pelo usuário;
-- expansão com Espaço, Tab ou Enter;
-- inserção em `input`, `textarea` e campos `contenteditable`;
-- variáveis preenchidas antes da inserção;
-- cópia automática quando não há campo ativo;
-- importação e exportação em JSON;
-- prevenção de IDs e atalhos duplicados;
-- restauração da base original;
-- painel arrastável, minimizável e fechável;
-- botão flutuante de reabertura;
-- atalho global `Ctrl + Shift + S`;
-- modo claro e escuro;
-- notificações do tipo toast;
-- configurações de expansão, permanência do painel e confirmação de exclusão.
-
-## Limitações de páginas corporativas
-
-Algumas páginas podem bloquear bookmarklets, `fetch`, scripts externos ou estilos remotos por políticas de segurança, como CSP. Campos dentro de `iframe` de outro domínio também não podem ser acessados pela página principal. Nesses casos, o favorito precisa ser executado dentro do próprio frame ou o ambiente precisa liberar a origem do GitHub Pages.
+Tudo permanece no navegador. Nenhum dado preenchido nas variáveis é enviado a servidores.
