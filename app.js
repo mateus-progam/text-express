@@ -1,19 +1,20 @@
 /*
- * Text Express 6.0.0
+ * Text Express 7.0.0
  * Expansor de textos para atendimento e registro de protocolos.
  * Sem dependências externas.
  */
 (() => {
   "use strict";
 
-  const APP_VERSION = "6.0.0";
+  const APP_VERSION = "7.0.0";
   const STORAGE_KEYS = Object.freeze({
     snippets: "text_express_snippets",
     darkMode: "te_dark_mode",
     settings: "text_express_settings",
     position: "text_express_position",
     launcherPosition: "text_express_launcher_position",
-    categories: "text_express_categories"
+    categories: "text_express_categories",
+    rememberedVariables: "text_express_remembered_variables"
   });
 
   const DEFAULT_SETTINGS = Object.freeze({
@@ -2726,6 +2727,709 @@
   TextExpressApp.prototype.collapseToLauncher = function () {
     if (this.isFullscreen) this.exitFullscreen();
     return teV6Original.collapseToLauncher.call(this);
+  };
+
+
+
+  /* ==========================================================
+   * Text Express 7.0
+   * - Memoriza [atendente] após o primeiro preenchimento.
+   * - Salva automaticamente alterações de modelos existentes.
+   * - Verifica a gravação no armazenamento.
+   * - Sincroniza scripts entre abas do mesmo sistema/origem.
+   * ========================================================== */
+  const TE_V7_SYNC_CHANNEL = "text-express-model-sync-v1";
+  const TE_V7_AUTOSAVE_DELAY = 650;
+
+  const teV7Original = Object.freeze({
+    init: TextExpressApp.prototype.init,
+    normalizeSnippet: TextExpressApp.prototype.normalizeSnippet,
+    loadSnippets: TextExpressApp.prototype.loadSnippets,
+    openModal: TextExpressApp.prototype.openModal,
+    closeModal: TextExpressApp.prototype.closeModal,
+    openSettings: TextExpressApp.prototype.openSettings,
+    submitSettings: TextExpressApp.prototype.submitSettings,
+    handleRootClick: TextExpressApp.prototype.handleRootClick,
+    processFlowStep: TextExpressApp.prototype.processFlowStep
+  });
+
+  TextExpressApp.prototype.normalizeVariableStorageKey = function (name) {
+    return String(name || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  };
+
+  TextExpressApp.prototype.getPersistentVariableKey = function (name) {
+    const normalized = this.normalizeVariableStorageKey(name);
+    const aliases = new Set([
+      "atendente",
+      "nome atendente",
+      "nome do atendente",
+      "operador",
+      "nome operador",
+      "nome do operador",
+      "agente",
+      "nome agente",
+      "nome do agente"
+    ]);
+    return aliases.has(normalized) ? "atendente" : null;
+  };
+
+  TextExpressApp.prototype.loadRememberedVariables = function () {
+    this.rememberedVariables = {};
+    const saved = this.storageGet(STORAGE_KEYS.rememberedVariables);
+    if (!saved) return;
+    try {
+      const parsed = JSON.parse(saved);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
+      for (const [key, value] of Object.entries(parsed)) {
+        const clean = String(value ?? "").trim();
+        if (clean) this.rememberedVariables[key] = clean;
+      }
+    } catch {
+      this.rememberedVariables = {};
+    }
+  };
+
+  TextExpressApp.prototype.saveRememberedVariables = function () {
+    const saved = this.storageSet(
+      STORAGE_KEYS.rememberedVariables,
+      JSON.stringify(this.rememberedVariables || {})
+    );
+
+    if (saved && this.syncChannel) {
+      try {
+        this.syncChannel.postMessage({
+          type: "remembered-variables",
+          values: this.rememberedVariables
+        });
+      } catch {}
+    }
+    return saved;
+  };
+
+  TextExpressApp.prototype.getRememberedVariableValue = function (name) {
+    const key = this.getPersistentVariableKey(name);
+    if (!key) return "";
+    return String(this.rememberedVariables?.[key] || "").trim();
+  };
+
+  TextExpressApp.prototype.rememberVariableValue = function (name, value) {
+    const key = this.getPersistentVariableKey(name);
+    const clean = String(value ?? "").trim();
+    if (!key || !clean) return false;
+    this.rememberedVariables[key] = clean;
+    this.saveRememberedVariables();
+    return true;
+  };
+
+  TextExpressApp.prototype.clearRememberedAttendant = function () {
+    if (!this.rememberedVariables) this.rememberedVariables = {};
+    delete this.rememberedVariables.atendente;
+    this.saveRememberedVariables();
+    const field = this.root.querySelector("#te-setting-attendant-name");
+    if (field) field.value = "";
+    this.showToast("Nome do atendente removido.", "success");
+  };
+
+  TextExpressApp.prototype.replaceVariablesWithValues = function (content, values) {
+    let result = String(content || "");
+    for (const [variable, value] of Object.entries(values || {})) {
+      const pattern = new RegExp(`\\[${this.escapeRegExp(variable)}\\]`, "g");
+      result = result.replace(pattern, value ?? "");
+    }
+    return result;
+  };
+
+  TextExpressApp.prototype.processVariables = async function (content) {
+    const variables = this.extractVariables(content);
+    if (!variables.length) return content;
+
+    const values = {};
+    const missing = [];
+
+    for (const variable of variables) {
+      const remembered = this.getRememberedVariableValue(variable);
+      if (remembered) values[variable] = remembered;
+      else missing.push(variable);
+    }
+
+    if (missing.length) {
+      const supplied = await this.requestVariableValues(missing);
+      if (!supplied) return null;
+
+      for (const [variable, value] of Object.entries(supplied)) {
+        values[variable] = value;
+        this.rememberVariableValue(variable, value);
+      }
+    }
+
+    return this.replaceVariablesWithValues(content, values);
+  };
+
+  TextExpressApp.prototype.submitVariables = function (event) {
+    event.preventDefault();
+    const values = {};
+    this.variableFields.querySelectorAll("[data-te-variable-name]").forEach((input) => {
+      const name = input.dataset.teVariableName;
+      const value = input.value;
+      values[name] = value;
+      this.rememberVariableValue(name, value);
+    });
+    this.finishVariablePrompt(values);
+  };
+
+  TextExpressApp.prototype.processFlowStep = async function (flow, step) {
+    const variables = this.extractVariables(step.conteudo);
+    if (!variables.length) return step.conteudo;
+
+    const flowValues = this.getFlowValues(flow.id);
+    const values = {};
+    const missing = [];
+
+    for (const variable of variables) {
+      const remembered = this.getRememberedVariableValue(variable);
+      const currentFlowValue = String(flowValues[variable] ?? "").trim();
+
+      if (remembered) {
+        values[variable] = remembered;
+        flowValues[variable] = remembered;
+      } else if (currentFlowValue) {
+        values[variable] = currentFlowValue;
+      } else {
+        missing.push(variable);
+      }
+    }
+
+    if (missing.length) {
+      const supplied = await this.requestVariableValues(missing);
+      if (!supplied) return null;
+
+      for (const [variable, value] of Object.entries(supplied)) {
+        flowValues[variable] = value;
+        values[variable] = value;
+        this.rememberVariableValue(variable, value);
+      }
+    }
+
+    return this.replaceVariablesWithValues(step.conteudo, values);
+  };
+
+  TextExpressApp.prototype.normalizeSnippet = function (raw = {}) {
+    const snippet = teV7Original.normalizeSnippet.call(this, raw);
+    snippet.updatedAt = typeof raw.updatedAt === "string" ? raw.updatedAt : "";
+    snippet.revision = Number.isFinite(Number(raw.revision)) ? Number(raw.revision) : 0;
+    return snippet;
+  };
+
+  TextExpressApp.prototype.createSyncRevision = function () {
+    this.localRevisionCounter = (this.localRevisionCounter || 0) + 1;
+    return Date.now() * 1000 + (this.localRevisionCounter % 1000);
+  };
+
+  TextExpressApp.prototype.readPayloadRevision = function (payload) {
+    const direct = Number(payload?.revision);
+    if (Number.isFinite(direct) && direct > 0) return direct;
+    const date = Date.parse(payload?.updatedAt || "");
+    return Number.isFinite(date) ? date : 0;
+  };
+
+  TextExpressApp.prototype.saveSnippets = function () {
+    const payload = {
+      app: "Text Express",
+      schemaVersion: 7,
+      appVersion: APP_VERSION,
+      updatedAt: new Date().toISOString(),
+      revision: this.createSyncRevision(),
+      snippets: this.snippets
+    };
+
+    const serialized = JSON.stringify(payload);
+    const written = this.storageSet(STORAGE_KEYS.snippets, serialized);
+    let verified = false;
+
+    if (written) {
+      try {
+        const check = JSON.parse(this.storageGet(STORAGE_KEYS.snippets) || "{}");
+        verified = Number(check.revision) === Number(payload.revision);
+      } catch {
+        verified = false;
+      }
+    }
+
+    this.rebuildShortcutMap();
+
+    if (!verified) {
+      this.showToast(
+        "Não foi possível confirmar o salvamento. Verifique se o navegador permite armazenamento local.",
+        "error",
+        6500
+      );
+      return false;
+    }
+
+    this.lastSnippetsRevision = payload.revision;
+
+    if (!this.isApplyingExternalSync && this.syncChannel) {
+      try {
+        this.syncChannel.postMessage({
+          type: "snippets",
+          payload: serialized
+        });
+      } catch {}
+    }
+
+    return true;
+  };
+
+  TextExpressApp.prototype.loadSnippets = function () {
+    teV7Original.loadSnippets.call(this);
+    try {
+      const payload = JSON.parse(this.storageGet(STORAGE_KEYS.snippets) || "{}");
+      this.lastSnippetsRevision = this.readPayloadRevision(payload);
+    } catch {
+      this.lastSnippetsRevision = 0;
+    }
+  };
+
+  TextExpressApp.prototype.applyExternalSnippetPayload = function (rawPayload) {
+    if (!rawPayload) return false;
+
+    try {
+      const payload = typeof rawPayload === "string"
+        ? JSON.parse(rawPayload)
+        : rawPayload;
+      const source = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.snippets)
+          ? payload.snippets
+          : null;
+
+      if (!source) return false;
+
+      const revision = this.readPayloadRevision(payload);
+      if (revision && revision <= Number(this.lastSnippetsRevision || 0)) return false;
+
+      const normalized = this.normalizeCollection(source);
+      if (!normalized.length) return false;
+
+      this.isApplyingExternalSync = true;
+      this.snippets = normalized;
+      this.lastSnippetsRevision = revision || Date.now();
+
+      if (this.selectedId && !this.snippets.some((item) => item.id === this.selectedId)) {
+        this.selectedId = null;
+      }
+
+      this.rebuildShortcutMap();
+      this.render();
+      this.isApplyingExternalSync = false;
+      return true;
+    } catch {
+      this.isApplyingExternalSync = false;
+      return false;
+    }
+  };
+
+  TextExpressApp.prototype.setupSnippetSync = function () {
+    if (typeof BroadcastChannel === "function") {
+      try {
+        this.syncChannel = new BroadcastChannel(TE_V7_SYNC_CHANNEL);
+        this.syncChannel.addEventListener("message", (event) => {
+          const data = event.data || {};
+          if (data.type === "snippets" && this.applyExternalSnippetPayload(data.payload)) {
+            this.showToast("Scripts sincronizados com outra aba.", "success", 2600);
+          } else if (data.type === "remembered-variables" && data.values) {
+            this.rememberedVariables = { ...data.values };
+          }
+        });
+      } catch {
+        this.syncChannel = null;
+      }
+    }
+
+    window.addEventListener("storage", (event) => {
+      if (event.storageArea !== window.localStorage) return;
+
+      if (event.key === STORAGE_KEYS.snippets && event.newValue) {
+        if (this.applyExternalSnippetPayload(event.newValue)) {
+          this.showToast("Alterações dos scripts sincronizadas.", "success", 2600);
+        }
+      }
+
+      if (event.key === STORAGE_KEYS.rememberedVariables) {
+        this.loadRememberedVariables();
+      }
+    });
+  };
+
+  TextExpressApp.prototype.setModelSaveStatus = function (message, state = "") {
+    const status = this.root.querySelector("#te-model-save-status");
+    if (!status) return;
+    status.textContent = message || "";
+    status.classList.remove("te-saving", "te-saved", "te-save-error");
+    if (state) status.classList.add(state);
+  };
+
+  TextExpressApp.prototype.formatAutosaveTime = function () {
+    try {
+      return new Intl.DateTimeFormat("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit"
+      }).format(new Date());
+    } catch {
+      return "";
+    }
+  };
+
+  TextExpressApp.prototype.collectSnippetFromForm = function (showErrors = false) {
+    if (showErrors) this.clearFormErrors();
+    const flowError = this.root.querySelector("#te-flow-error");
+    if (showErrors && flowError) flowError.textContent = "";
+
+    const id = this.root.querySelector("#te-form-id").value;
+    const tipo = this.root.querySelector('input[name="te-type"]:checked')?.value || "atendimento";
+    const modelo = tipo === "atendimento"
+      ? this.root.querySelector('input[name="te-model-kind"]:checked')?.value || "unico"
+      : "unico";
+    const nome = this.root.querySelector("#te-form-name").value.trim();
+    const atalho = this.normalizeShortcut(this.root.querySelector("#te-form-shortcut").value);
+    const triggerKey = this.root.querySelector("#te-form-trigger").value;
+    const categoriaId = this.root.querySelector("#te-form-category").value;
+    const category = this.getCategoryById(categoriaId) || this.resolveCategory(null, "Outros", tipo);
+    const favorito = this.root.querySelector("#te-form-favorite").checked;
+    const owners = this.getAllShortcutOwners(id);
+    const errors = [];
+
+    if (!nome) {
+      errors.push("Informe um nome para o modelo.");
+      if (showErrors) this.setFormError("name", "Informe um nome para o modelo.");
+    }
+
+    if (owners.has(atalho)) {
+      const message = `Esse atalho já pertence a “${owners.get(atalho)}”.`;
+      errors.push(message);
+      if (showErrors) this.setFormError("shortcut", message);
+    }
+
+    let conteudo = "";
+    let etapas = [];
+
+    if (modelo === "fluxo") {
+      etapas = this.syncEditingFlowSteps();
+
+      if (etapas.length < 2) {
+        errors.push("Uma sequência precisa ter pelo menos duas falas.");
+      }
+
+      const localShortcuts = new Set([atalho]);
+
+      for (let index = 0; index < etapas.length; index += 1) {
+        const step = etapas[index];
+
+        if (!step.nome || !step.conteudo) {
+          errors.push(`Preencha o nome e o texto da fala ${index + 1}.`);
+          break;
+        }
+
+        step.atalho = this.normalizeShortcut(step.atalho);
+
+        if (localShortcuts.has(step.atalho)) {
+          errors.push(`O atalho ${step.atalho} está repetido dentro da sequência.`);
+          break;
+        }
+
+        if (owners.has(step.atalho)) {
+          errors.push(`O atalho ${step.atalho} já pertence a “${owners.get(step.atalho)}”.`);
+          break;
+        }
+
+        localShortcuts.add(step.atalho);
+      }
+
+      conteudo = etapas.map((step) => step.conteudo).join("\n\n");
+
+      if (showErrors && flowError && errors.length) {
+        flowError.textContent = errors[errors.length - 1];
+      }
+    } else {
+      conteudo = this.root.querySelector("#te-form-content").value.trim();
+
+      if (!conteudo) {
+        errors.push("Informe o conteúdo que será inserido.");
+        if (showErrors) this.setFormError("content", "Informe o conteúdo que será inserido.");
+      }
+    }
+
+    if (errors.length) {
+      return {
+        valid: false,
+        errors,
+        id,
+        tipo,
+        modelo
+      };
+    }
+
+    const existingIndex = id
+      ? this.snippets.findIndex((item) => item.id === id)
+      : -1;
+    const base = existingIndex >= 0 ? this.snippets[existingIndex] : {};
+    const now = new Date().toISOString();
+
+    const snippet = this.normalizeSnippet({
+      ...base,
+      id: existingIndex >= 0 ? id : this.generateId(tipo),
+      tipo,
+      modelo,
+      nome,
+      atalho,
+      triggerKey,
+      categoriaId: category.id,
+      categoria: category.nome,
+      conteudo,
+      etapas,
+      favorito,
+      ativo: true,
+      origem: existingIndex >= 0 ? base.origem : "Criado pelo usuário",
+      updatedAt: now,
+      revision: Number(base.revision || 0) + 1
+    });
+
+    snippet.updatedAt = now;
+    snippet.revision = Number(base.revision || 0) + 1;
+
+    return {
+      valid: true,
+      id,
+      tipo,
+      modelo,
+      existingIndex,
+      snippet
+    };
+  };
+
+  TextExpressApp.prototype.applyCollectedSnippet = function (collected) {
+    if (!collected?.valid) return false;
+
+    if (collected.existingIndex >= 0) {
+      this.snippets.splice(collected.existingIndex, 1, collected.snippet);
+    } else {
+      this.snippets.unshift(collected.snippet);
+      collected.existingIndex = 0;
+    }
+
+    return this.saveSnippets();
+  };
+
+  TextExpressApp.prototype.autosaveCurrentModel = function (silent = false) {
+    if (this.snippetModal.classList.contains("te-hidden")) return false;
+
+    const id = this.root.querySelector("#te-form-id").value;
+    if (!id) {
+      if (!silent) {
+        this.setModelSaveStatus(
+          "Novo modelo: use “Salvar e concluir” para criar.",
+          ""
+        );
+      }
+      return false;
+    }
+
+    const collected = this.collectSnippetFromForm(false);
+
+    if (!collected.valid || collected.existingIndex < 0) {
+      if (!silent) {
+        this.setModelSaveStatus(
+          "Alterações pendentes: complete os campos obrigatórios.",
+          "te-save-error"
+        );
+      }
+      return false;
+    }
+
+    const saved = this.applyCollectedSnippet(collected);
+
+    if (!saved) {
+      this.setModelSaveStatus(
+        "Não foi possível salvar automaticamente.",
+        "te-save-error"
+      );
+      return false;
+    }
+
+    this.selectedId = collected.snippet.id;
+    this.render();
+
+    if (!silent) {
+      const time = this.formatAutosaveTime();
+      this.setModelSaveStatus(
+        `Salvo automaticamente${time ? ` às ${time}` : ""}.`,
+        "te-saved"
+      );
+    }
+
+    return true;
+  };
+
+  TextExpressApp.prototype.scheduleModelAutosave = function () {
+    if (this.snippetModal.classList.contains("te-hidden")) return;
+
+    const id = this.root.querySelector("#te-form-id").value;
+
+    if (!id) {
+      this.setModelSaveStatus(
+        "Novo modelo: use “Salvar e concluir” para criar.",
+        ""
+      );
+      return;
+    }
+
+    this.setModelSaveStatus("Salvando alterações…", "te-saving");
+    window.clearTimeout(this.modelAutosaveTimer);
+    this.modelAutosaveTimer = window.setTimeout(() => {
+      this.autosaveCurrentModel(false);
+    }, TE_V7_AUTOSAVE_DELAY);
+  };
+
+  TextExpressApp.prototype.setupModelAutosave = function () {
+    const schedule = (event) => {
+      if (!event.target.closest("#te-snippet-form")) return;
+      this.scheduleModelAutosave();
+    };
+
+    this.snippetForm.addEventListener("input", schedule);
+    this.snippetForm.addEventListener("change", schedule);
+  };
+
+  TextExpressApp.prototype.saveSnippet = function (event) {
+    event.preventDefault();
+    window.clearTimeout(this.modelAutosaveTimer);
+
+    const collected = this.collectSnippetFromForm(true);
+    if (!collected.valid) {
+      this.setModelSaveStatus(
+        "Existem campos que precisam ser corrigidos.",
+        "te-save-error"
+      );
+      return;
+    }
+
+    const saved = this.applyCollectedSnippet(collected);
+
+    if (!saved) {
+      this.setModelSaveStatus(
+        "O navegador não confirmou o salvamento.",
+        "te-save-error"
+      );
+      return;
+    }
+
+    this.activeType = collected.tipo;
+    this.activeCategory = "Todos";
+    this.selectedId = collected.snippet.id;
+    this.suppressAutosaveOnClose = true;
+    this.closeModal();
+    this.suppressAutosaveOnClose = false;
+    this.render();
+
+    this.showToast(
+      collected.existingIndex >= 0
+        ? collected.modelo === "fluxo"
+          ? "Sequência salva e sincronizada."
+          : "Modelo salvo e sincronizado."
+        : collected.modelo === "fluxo"
+          ? "Sequência criada."
+          : "Modelo criado.",
+      "success"
+    );
+  };
+
+  TextExpressApp.prototype.openModal = function (data = null) {
+    teV7Original.openModal.call(this, data);
+    window.clearTimeout(this.modelAutosaveTimer);
+
+    if (data) {
+      this.setModelSaveStatus(
+        "Alterações neste modelo são salvas automaticamente.",
+        ""
+      );
+    } else {
+      this.setModelSaveStatus(
+        "Novo modelo: preencha os campos e salve para criar.",
+        ""
+      );
+    }
+  };
+
+  TextExpressApp.prototype.closeModal = function () {
+    window.clearTimeout(this.modelAutosaveTimer);
+
+    if (
+      !this.suppressAutosaveOnClose
+      && this.editingId
+      && !this.snippetModal.classList.contains("te-hidden")
+    ) {
+      this.autosaveCurrentModel(true);
+    }
+
+    this.setModelSaveStatus("");
+    return teV7Original.closeModal.call(this);
+  };
+
+  TextExpressApp.prototype.openSettings = function () {
+    teV7Original.openSettings.call(this);
+    const field = this.root.querySelector("#te-setting-attendant-name");
+    if (field) field.value = this.getRememberedVariableValue("atendente");
+  };
+
+  TextExpressApp.prototype.submitSettings = function (event) {
+    const field = this.root.querySelector("#te-setting-attendant-name");
+    const attendant = String(field?.value || "").trim();
+
+    if (attendant) {
+      this.rememberedVariables.atendente = attendant;
+    } else {
+      delete this.rememberedVariables.atendente;
+    }
+
+    this.saveRememberedVariables();
+    return teV7Original.submitSettings.call(this, event);
+  };
+
+  TextExpressApp.prototype.handleRootClick = function (event) {
+    const clearButton = event.target.closest('[data-te-action="clear-attendant"]');
+
+    if (clearButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.clearRememberedAttendant();
+      return;
+    }
+
+    return teV7Original.handleRootClick.call(this, event);
+  };
+
+  TextExpressApp.prototype.init = function () {
+    this.rememberedVariables = {};
+    this.modelAutosaveTimer = null;
+    this.syncChannel = null;
+    this.lastSnippetsRevision = 0;
+    this.localRevisionCounter = 0;
+    this.isApplyingExternalSync = false;
+    this.suppressAutosaveOnClose = false;
+
+    const result = teV7Original.init.call(this);
+
+    this.loadRememberedVariables();
+    this.setupModelAutosave();
+    this.setupSnippetSync();
+
+    return result;
   };
 
 

@@ -20,7 +20,7 @@
     </section>
   </main>
 
-  <div id="text-express-app" class="te-app" data-version="6.0.0">
+  <div id="text-express-app" class="te-app" data-version="7.0.0">
     <svg class="te-icon-sprite" aria-hidden="true" focusable="false">
       <symbol id="te-i-zap" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/></symbol>
       <symbol id="te-i-message-circle" viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.5 9.5 9.5 0 0 1-4-.9L3 21l1.6-4.2A8.5 8.5 0 1 1 21 11.5Z"/><path d="M8 12h.01M12 12h.01M16 12h.01"/></symbol>
@@ -276,9 +276,11 @@
             </label>
           </div>
 
-          <footer class="te-modal-footer">
-            <button class="te-secondary-button" type="button" data-te-action="modal-close"><svg class="te-icon" aria-hidden="true"><use href="#te-i-x"></use></svg> Cancelar</button>
-            <button class="te-primary-button" type="submit"><svg class="te-icon" aria-hidden="true"><use href="#te-i-save"></use></svg> Salvar modelo</button>
+          <footer class="te-modal-footer te-model-modal-footer">
+            <span class="te-model-save-status" id="te-model-save-status" role="status" aria-live="polite"></span>
+            <span class="te-modal-footer-spacer"></span>
+            <button class="te-secondary-button" type="button" data-te-action="modal-close"><svg class="te-icon" aria-hidden="true"><use href="#te-i-x"></use></svg> Fechar</button>
+            <button class="te-primary-button" type="submit"><svg class="te-icon" aria-hidden="true"><use href="#te-i-save"></use></svg> Salvar e concluir</button>
           </footer>
         </form>
       </section>
@@ -332,7 +334,7 @@
           <button class="te-icon-button" type="button" data-te-action="variable-cancel" aria-label="Cancelar preenchimento"><svg class="te-icon " aria-hidden="true"><use href="#te-i-x"></use></svg></button>
         </header>
         <form id="te-variable-form">
-          <p class="te-variable-help">Os valores abaixo serão substituídos no texto antes da inserção.</p>
+          <p class="te-variable-help">Os valores abaixo serão substituídos no texto antes da inserção. O nome informado em <code>[atendente]</code> será lembrado automaticamente neste navegador.</p>
           <div class="te-variable-fields" id="te-variable-fields"></div>
           <footer class="te-modal-footer">
             <button class="te-secondary-button" type="button" data-te-action="variable-cancel"><svg class="te-icon" aria-hidden="true"><use href="#te-i-x"></use></svg> Cancelar</button>
@@ -353,6 +355,16 @@
         </header>
         <form id="te-settings-form">
           <div class="te-settings-list">
+            <div class="te-setting-profile">
+              <label for="te-setting-attendant-name">
+                <span>
+                  <strong>Nome do atendente</strong>
+                  <small>Preenchido automaticamente sempre que um modelo usar <code>[atendente]</code>.</small>
+                </span>
+                <input id="te-setting-attendant-name" type="text" maxlength="80" autocomplete="name" placeholder="Digite seu nome">
+              </label>
+              <button class="te-secondary-button te-setting-clear-button" type="button" data-te-action="clear-attendant">Limpar nome lembrado</button>
+            </div>
             <label class="te-setting-row">
               <span>
                 <strong>Expansão automática</strong>

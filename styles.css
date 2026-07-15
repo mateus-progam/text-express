@@ -2317,3 +2317,108 @@
     height: 100dvh !important;
   }
 }
+
+/* ==========================================================
+   Text Express 7.0 — memória, salvamento e sincronização
+   ========================================================== */
+
+#text-express-app .te-variable-help code,
+#text-express-app .te-setting-profile code {
+  padding: 1px 4px;
+  border-radius: 5px;
+  background: var(--te-surface-3);
+  color: var(--te-primary);
+  font-size: .92em;
+}
+
+#text-express-app .te-setting-profile {
+  display: grid;
+  gap: 8px;
+  padding: 11px 12px;
+  border: 1px solid var(--te-border);
+  border-radius: 10px;
+  background: var(--te-surface-2);
+}
+
+#text-express-app .te-setting-profile label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 42%);
+  align-items: center;
+  gap: 12px;
+}
+
+#text-express-app .te-setting-profile label > span {
+  display: grid;
+  gap: 3px;
+}
+
+#text-express-app .te-setting-profile strong {
+  font-size: 11px;
+}
+
+#text-express-app .te-setting-profile small {
+  color: var(--te-muted);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+#text-express-app .te-setting-profile input {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid var(--te-border);
+  border-radius: 8px;
+  background: var(--te-surface);
+  color: var(--te-text);
+}
+
+#text-express-app .te-setting-clear-button {
+  justify-self: end;
+  min-height: 28px;
+  font-size: 9px;
+}
+
+#text-express-app .te-model-modal-footer {
+  min-height: 51px;
+}
+
+#text-express-app .te-model-save-status {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 26px;
+  color: var(--te-muted);
+  font-size: 9px;
+  line-height: 1.3;
+}
+
+#text-express-app .te-model-save-status.te-saving {
+  color: var(--te-primary);
+}
+
+#text-express-app .te-model-save-status.te-saved {
+  color: var(--te-success);
+}
+
+#text-express-app .te-model-save-status.te-save-error {
+  color: var(--te-danger);
+}
+
+@media (max-width: 620px) {
+  #text-express-app .te-setting-profile label {
+    grid-template-columns: 1fr;
+  }
+
+  #text-express-app .te-setting-clear-button {
+    justify-self: stretch;
+  }
+
+  #text-express-app .te-model-save-status {
+    width: 100%;
+    order: -1;
+  }
+
+  #text-express-app .te-model-modal-footer {
+    flex-wrap: wrap;
+  }
+}

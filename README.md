@@ -1,47 +1,55 @@
-# Text Express 6.0
+# Text Express 7.0
 
-Ferramenta local para scripts de atendimento e registros internos de protocolo.
+Ferramenta para scripts de atendimento e registros internos de protocolo.
 
-## Controle de tela grande
+## Nome do atendente lembrado automaticamente
 
-Os controles do cabeçalho ficam nesta ordem:
+Na primeira vez em que um modelo usar `[atendente]`, o Text Express solicitará o nome.
 
-`Tema  —  Tela grande  Fechar`
+Depois disso:
 
-O ícone de tela grande:
+- o nome fica salvo no navegador;
+- os próximos modelos com `[atendente]` são preenchidos automaticamente;
+- a janela não será aberta novamente apenas para pedir o nome;
+- o nome pode ser alterado ou apagado em **Configurações → Nome do atendente**.
 
-- faz o painel preencher toda a área visível do navegador;
-- muda para o ícone de restaurar enquanto estiver expandido;
-- volta ao tamanho e à posição anteriores quando clicado novamente;
-- também pode ser restaurado pressionando `Esc`;
-- não permite arrastar o painel enquanto ele ocupa toda a tela;
-- ao minimizar ou fechar, retorna ao pequeno launcher flutuante.
+Por segurança, dados variáveis de clientes, protocolos e prazos não ficam gravados permanentemente. A memória automática é usada somente para dados fixos do operador, como `[atendente]`.
 
-Não foi adicionada configuração automática. O modo de tela grande só é ativado quando o usuário clica no ícone.
+## Salvamento automático dos scripts
 
-## Sequências de falas
+Ao editar um modelo existente:
 
-As sequências permanecem exclusivas da aba Atendimento.
+- as alterações são salvas automaticamente após uma breve pausa;
+- aparece a mensagem **Salvo automaticamente**;
+- o atalho passa a usar o novo conteúdo imediatamente;
+- o card e a visualização são atualizados;
+- o salvamento é conferido no armazenamento do navegador;
+- fechar a janela de edição não perde a última alteração válida.
 
-- `/semgerencia` abre a sequência;
-- `/semgerencia1`, `/semgerencia2` e `/semgerencia3` inserem falas diretamente;
-- protocolos permanecem como textos únicos;
-- botão Inserir e avançar;
-- variáveis compartilhadas;
-- falas opcionais;
-- ordem editável.
+Modelos novos ainda precisam do botão **Salvar e concluir** para serem criados.
 
-## Outros recursos
+## Sincronização
 
-- interface compacta;
-- launcher pequeno, arrastável e com posição salva;
-- categorias editáveis;
-- favoritos;
-- busca;
+Quando o mesmo sistema estiver aberto em mais de uma aba ou janela:
+
+- alterações salvas em uma aba aparecem nas demais;
+- os mapas de atalhos são atualizados;
+- a versão mais recente do texto é usada na próxima inserção;
+- o nome do atendente lembrado também é atualizado.
+
+A sincronização automática funciona entre abas do mesmo site e navegador. Sites diferentes possuem armazenamentos separados por segurança do navegador.
+
+## Recursos preservados
+
+- interface leve;
+- launcher pequeno e arrastável;
+- modo de tela grande;
+- sequências apenas em Atendimento;
+- protocolos como textos únicos;
+- categorias, favoritos e busca;
 - importação e exportação;
 - tema claro e escuro;
-- armazenamento local;
-- inserção direta ou cópia.
+- atalhos personalizados.
 
 ## Atualização no GitHub
 
