@@ -1,42 +1,36 @@
-# Text Express 12.0
+# Text Express 13.0
 
-## Organização por arrastar e soltar
+## Arrastar e soltar corrigido
 
-Os dois botões quadrados de subir e descer foram removidos.
+A implementação anterior foi removida e refeita sobre a versão estável.
 
-Agora, em **Atendimento** e **Protocolo**:
+### Como organizar
 
-1. clique com o botão esquerdo em uma área livre do card;
-2. mantenha o botão pressionado;
-3. arraste o modelo para cima ou para baixo;
-4. solte exatamente na posição desejada.
+Em **Atendimento** ou **Protocolo**:
 
-Uma pequena seta vertical aparece no card apenas para indicar que ele pode ser movimentado.
+1. posicione o mouse sobre uma área livre do card;
+2. pressione e segure o botão esquerdo;
+3. arraste o card para cima ou para baixo;
+4. uma linha azul mostra a posição de destino;
+5. solte o botão para salvar.
 
-### Comportamento
+### Correções desta versão
 
+- removida a pasta que aparecia no lugar da seta;
+- removidos os antigos botões quadrados;
+- seta vertical desenhada diretamente, sem dependência de catálogo;
+- arraste nativo do navegador;
 - o card inteiro pode ser arrastado;
-- os botões Inserir, Editar, Excluir e Favorito continuam funcionando normalmente;
-- o card acompanha a reorganização da lista em tempo real;
-- a lista rola automaticamente quando o ponteiro se aproxima das bordas;
-- `Esc` cancela o movimento e restaura a ordem anterior;
-- a ordem é salva automaticamente ao soltar;
-- a ordem permanece depois de fechar o navegador ou desligar o computador;
-- exportação, importação e sincronização entre abas preservam a ordem;
-- funciona na categoria Todos, em categorias específicas e durante buscas.
+- Inserir, Editar, Excluir e Favorito não iniciam arraste;
+- rolagem automática perto das bordas;
+- soltar fora da lista cancela o movimento;
+- `Esc` cancela e restaura a ordem anterior;
+- nova ordem salva no navegador;
+- exportação/importação preservam a ordem;
+- sincronização entre abas preserva a ordem;
+- funciona em Atendimento e Protocolo.
 
-A organização é individual de cada usuário e fica no navegador dele.
-
-## Recursos preservados
-
-- tópicos de Protocolo clicáveis e editáveis;
-- faixa de categorias arrastável horizontalmente;
-- sequências de falas em Atendimento;
-- nome do atendente memorizado;
-- salvamento automático;
-- modo de tela grande;
-- launcher arrastável;
-- importação e exportação.
+A organização permanece individual para cada usuário.
 
 ## Atualização
 
@@ -48,4 +42,4 @@ Envie para a raiz do GitHub:
 - `bookmarklet.js`
 - `README.md`
 
-Depois pressione `Ctrl + F5`.
+Depois aguarde o GitHub Pages e pressione `Ctrl + F5`.

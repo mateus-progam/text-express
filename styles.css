@@ -2957,144 +2957,71 @@
 }
 
 /* ==========================================================
-   Text Express 11.0 — ordenação manual de Atendimento/Protocolo
+   Text Express 13.0 — drag and drop vertical corrigido
    ========================================================== */
-
-#text-express-app .te-card-order-controls {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  overflow: hidden;
-  margin-left: 2px;
-  border: 1px solid var(--te-border);
-  border-radius: 7px;
-  background: var(--te-surface-2);
-}
-
-#text-express-app .te-order-button {
-  display: inline-grid;
-  place-items: center;
-  width: 25px;
-  height: 25px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--te-muted);
-  cursor: pointer;
-}
-
-#text-express-app .te-order-button + .te-order-button {
-  border-left: 1px solid var(--te-border);
-}
-
-#text-express-app .te-order-button .te-icon {
-  width: 13px;
-  height: 13px;
-}
-
-#text-express-app .te-order-button:hover:not(:disabled),
-#text-express-app .te-order-button:focus-visible:not(:disabled) {
-  background: var(--te-primary-soft);
-  color: var(--te-primary);
-}
-
-#text-express-app .te-order-button:focus-visible {
-  position: relative;
-  z-index: 2;
-  outline: 2px solid color-mix(in srgb, var(--te-primary) 68%, transparent);
-  outline-offset: -2px;
-}
-
-#text-express-app .te-order-button:disabled {
-  opacity: .28;
-  cursor: not-allowed;
-}
-
-/* Mantém os controles próximos de Editar/Excluir. */
-#text-express-app .te-card-actions .te-card-order-controls {
-  order: 2;
-}
-
-#text-express-app .te-card-actions .te-card-insert {
-  order: 1;
-}
-
-#text-express-app .te-card-actions [data-te-action="edit"] {
-  order: 3;
-}
-
-#text-express-app .te-card-actions [data-te-action="delete"] {
-  order: 4;
-}
-
-/* Em telas estreitas, os botões continuam utilizáveis sem aumentar o card. */
-@media (max-width: 540px) {
-  #text-express-app .te-card-order-controls {
-    border-radius: 6px;
-  }
-
-  #text-express-app .te-order-button {
-    width: 27px;
-    height: 27px;
-  }
-}
-
-/* ==========================================================
-   Text Express 12.0 — arrastar e soltar verticalmente
-   ========================================================== */
-
-/* Remove visualmente os controles antigos, inclusive sob cache parcial. */
-#text-express-app .te-card-order-controls {
-  display: none !important;
-}
 
 #text-express-app .te-card-draggable {
   cursor: grab;
-  touch-action: pan-y;
+  -webkit-user-drag: element;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 #text-express-app .te-card-draggable:active {
   cursor: grabbing;
 }
 
+/* Botões mantêm o próprio comportamento e não iniciam arraste. */
 #text-express-app .te-card-draggable button,
 #text-express-app .te-card-draggable a,
 #text-express-app .te-card-draggable input,
 #text-express-app .te-card-draggable textarea,
-#text-express-app .te-card-draggable select {
+#text-express-app .te-card-draggable select,
+#text-express-app .te-card-draggable label {
+  -webkit-user-drag: none;
   cursor: pointer;
 }
 
-/* Pequena seta vertical: indicação, não é um botão separado. */
-#text-express-app .te-card-drag-handle {
+/*
+ * Seta vertical apenas indicativa.
+ * Não é botão e não usa o catálogo que antes gerou uma pasta.
+ */
+#text-express-app .te-card-drag-indicator {
   display: inline-grid;
   flex: none;
   place-items: center;
-  width: 25px;
-  height: 25px;
+  width: 27px;
+  height: 27px;
   margin-right: 2px;
-  border: 1px solid transparent;
+  border: 1px solid var(--te-border);
   border-radius: 7px;
-  color: color-mix(in srgb, var(--te-muted) 76%, transparent);
-  cursor: grab;
+  background: var(--te-surface-2);
+  color: var(--te-muted);
+  pointer-events: none;
   transition:
-    background 120ms ease,
+    color 120ms ease,
     border-color 120ms ease,
-    color 120ms ease;
+    background 120ms ease;
 }
 
-#text-express-app .te-card-drag-handle .te-icon {
+#text-express-app .te-card-drag-indicator svg {
   width: 15px;
   height: 15px;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-#text-express-app .te-card-draggable:hover .te-card-drag-handle {
-  border-color: var(--te-border);
-  background: var(--te-surface-2);
+#text-express-app .te-card-draggable:hover .te-card-drag-indicator {
+  border-color: color-mix(in srgb, var(--te-primary) 52%, var(--te-border));
+  background: var(--te-primary-soft);
   color: var(--te-primary);
 }
 
-#text-express-app .te-card-actions .te-card-drag-handle {
+#text-express-app .te-card-actions .te-card-drag-indicator {
   order: 2;
 }
 
@@ -3110,57 +3037,59 @@
   order: 4;
 }
 
-/* Card sendo movimentado. */
-#text-express-app .te-snippet-card.te-card-dragging {
-  z-index: 30;
-  border-color: var(--te-primary) !important;
-  background: color-mix(
-    in srgb,
-    var(--te-primary-soft) 72%,
-    var(--te-surface)
-  ) !important;
-  box-shadow:
-    0 16px 32px rgba(15, 23, 42, .28),
-    0 0 0 2px color-mix(in srgb, var(--te-primary) 30%, transparent) !important;
-  opacity: .9;
-  cursor: grabbing !important;
-  transform: scale(.992);
-  transition: none !important;
-}
-
-#text-express-app .te-snippet-card.te-card-dragging .te-card-drag-handle {
-  border-color: var(--te-primary);
-  background: var(--te-primary);
-  color: #fff;
-  cursor: grabbing;
-}
-
 #text-express-app .te-list.te-list-reordering {
   cursor: grabbing;
-  scroll-behavior: auto !important;
   user-select: none;
   -webkit-user-select: none;
 }
 
-#text-express-app .te-list.te-list-reordering .te-snippet-card:not(.te-card-dragging) {
+#text-express-app .te-list.te-list-reordering .te-snippet-card {
   transition:
-    transform 130ms ease,
-    margin 130ms ease,
-    border-color 130ms ease;
+    transform 120ms ease,
+    margin 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
 }
 
-#text-express-app .te-list.te-list-reordering button,
-#text-express-app .te-list.te-list-reordering a {
+#text-express-app .te-snippet-card.te-card-dragging {
+  opacity: .48;
+  border-color: var(--te-primary) !important;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--te-primary) 26%, transparent),
+    0 12px 28px rgba(15, 23, 42, .2) !important;
+  cursor: grabbing !important;
+}
+
+/* Linha que mostra exatamente onde o card será colocado. */
+#text-express-app .te-snippet-card.te-card-drop-before::before,
+#text-express-app .te-snippet-card.te-card-drop-after::after {
+  position: absolute;
+  right: 4px;
+  left: 4px;
+  z-index: 40;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--te-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--te-primary) 20%, transparent);
+  content: "";
   pointer-events: none;
 }
 
+#text-express-app .te-snippet-card.te-card-drop-before::before {
+  top: -6px;
+}
+
+#text-express-app .te-snippet-card.te-card-drop-after::after {
+  bottom: -6px;
+}
+
 @media (max-width: 540px) {
-  #text-express-app .te-card-drag-handle {
-    width: 28px;
-    height: 28px;
+  #text-express-app .te-card-drag-indicator {
+    width: 29px;
+    height: 29px;
   }
 
-  #text-express-app .te-card-drag-handle .te-icon {
+  #text-express-app .te-card-drag-indicator svg {
     width: 16px;
     height: 16px;
   }

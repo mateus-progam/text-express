@@ -1,12 +1,12 @@
 /*
- * Text Express 12.0.0
+ * Text Express 13.0.0
  * Expansor de textos para atendimento e registro de protocolos.
  * Sem dependências externas.
  */
 (() => {
   "use strict";
 
-  const APP_VERSION = "12.0.0";
+  const APP_VERSION = "13.0.0";
   const STORAGE_KEYS = Object.freeze({
     snippets: "text_express_snippets",
     darkMode: "te_dark_mode",
@@ -3778,359 +3778,164 @@
 
 
   /* ==========================================================
-   * Text Express 11.0 — ordenação manual dos modelos
+   * Text Express 13.0 — arrastar e soltar corrigido
+   * Usa o recurso nativo de drag and drop do navegador.
    * Disponível em Atendimento e Protocolo.
-   * A ordem é a própria ordem do array salvo no navegador.
    * ========================================================== */
-  const teV11Original = Object.freeze({
-    renderCard: TextExpressApp.prototype.renderCard,
-    handleRootClick: TextExpressApp.prototype.handleRootClick,
-    onGlobalKeyDown: TextExpressApp.prototype.onGlobalKeyDown
-  });
-
-  TextExpressApp.prototype.canManuallyOrderCurrentList = function () {
-    return this.activeType === "atendimento" || this.activeType === "protocolo";
-  };
-
-  TextExpressApp.prototype.getVisibleOrderState = function (snippetId) {
-    if (!this.canManuallyOrderCurrentList()) {
-      return {
-        enabled: false,
-        index: -1,
-        total: 0,
-        canMoveUp: false,
-        canMoveDown: false
-      };
-    }
-
-    const visibleItems = this.getFilteredSnippets();
-    const index = visibleItems.findIndex((item) => item.id === snippetId);
-
-    return {
-      enabled: index >= 0,
-      index,
-      total: visibleItems.length,
-      canMoveUp: index > 0,
-      canMoveDown: index >= 0 && index < visibleItems.length - 1
-    };
-  };
-
-  TextExpressApp.prototype.renderOrderControls = function (snippet) {
-    const state = this.getVisibleOrderState(snippet.id);
-    if (!state.enabled) return "";
-
-    const positionLabel = `${state.index + 1} de ${state.total}`;
-
-    return `
-      <span
-        class="te-card-order-controls"
-        role="group"
-        aria-label="Organizar posição do modelo. Posição ${positionLabel}"
-        title="Posição ${positionLabel}">
-        <button
-          class="te-order-button"
-          type="button"
-          data-te-action="model-move-up"
-          data-te-id="${this.escapeAttr(snippet.id)}"
-          title="Mover para cima"
-          aria-label="Mover ${this.escapeAttr(snippet.nome)} para cima"
-          ${state.canMoveUp ? "" : "disabled"}>
-          ${this.icon("chevron-up")}
-        </button>
-        <button
-          class="te-order-button"
-          type="button"
-          data-te-action="model-move-down"
-          data-te-id="${this.escapeAttr(snippet.id)}"
-          title="Mover para baixo"
-          aria-label="Mover ${this.escapeAttr(snippet.nome)} para baixo"
-          ${state.canMoveDown ? "" : "disabled"}>
-          ${this.icon("chevron-down")}
-        </button>
-      </span>`;
-  };
-
-  TextExpressApp.prototype.renderCard = function (snippet) {
-    const html = teV11Original.renderCard.call(this, snippet);
-    const controls = this.renderOrderControls(snippet);
-
-    if (!controls) return html;
-
-    /*
-     * Os botões são posicionados antes do botão Editar, mantendo:
-     * inserir/abrir, ordenar, editar e excluir.
-     */
-    const editButtonPattern =
-      /(<button class="te-icon-action" type="button" data-te-action="edit")/;
-
-    if (editButtonPattern.test(html)) {
-      return html.replace(editButtonPattern, `${controls}$1`);
-    }
-
-    return html.replace("</article>", `${controls}</article>`);
-  };
-
-  TextExpressApp.prototype.getManualOrderItems = function () {
-    return this.canManuallyOrderCurrentList()
-      ? this.getFilteredSnippets()
-      : [];
-  };
-
-  TextExpressApp.prototype.moveModelInVisibleOrder = function (snippetId, direction) {
-    if (!this.canManuallyOrderCurrentList()) return false;
-
-    const step = direction < 0 ? -1 : 1;
-    const visibleItems = this.getManualOrderItems();
-    const visibleIndex = visibleItems.findIndex((item) => item.id === snippetId);
-    const targetVisibleIndex = visibleIndex + step;
-
-    if (
-      visibleIndex < 0 ||
-      targetVisibleIndex < 0 ||
-      targetVisibleIndex >= visibleItems.length
-    ) {
-      return false;
-    }
-
-    const currentItem = visibleItems[visibleIndex];
-    const targetItem = visibleItems[targetVisibleIndex];
-    const currentIndex = this.snippets.findIndex(
-      (item) => item.id === currentItem.id
-    );
-    const targetIndex = this.snippets.findIndex(
-      (item) => item.id === targetItem.id
-    );
-
-    if (currentIndex < 0 || targetIndex < 0) return false;
-
-    /*
-     * A troca ocorre no array principal. Por isso:
-     * - continua válida ao mudar de categoria;
-     * - é persistida pelo saveSnippets;
-     * - entra na exportação;
-     * - é sincronizada entre abas.
-     */
-    [this.snippets[currentIndex], this.snippets[targetIndex]] = [
-      this.snippets[targetIndex],
-      this.snippets[currentIndex]
-    ];
-
-    this.selectedId = snippetId;
-
-    const saved = this.saveSnippets();
-    if (!saved) return false;
-
-    this.renderSnippets();
-
-    window.requestAnimationFrame(() => {
-      const card = this.listElement.querySelector(
-        `[data-te-card-id="${CSS.escape(snippetId)}"]`
-      );
-
-      if (card) {
-        card.scrollIntoView({
-          behavior: "smooth",
-          block: "nearest",
-          inline: "nearest"
-        });
-      }
-    });
-
-    const newPosition = targetVisibleIndex + 1;
-    const directionLabel = step < 0 ? "cima" : "baixo";
-
-    this.showToast(
-      `Modelo movido para ${directionLabel}. Nova posição: ${newPosition}.`,
-      "success",
-      2200
-    );
-
-    return true;
-  };
-
-  TextExpressApp.prototype.handleRootClick = function (event) {
-    const moveButton = event.target.closest(
-      '[data-te-action="model-move-up"], [data-te-action="model-move-down"]'
-    );
-
-    if (moveButton) {
-      event.preventDefault();
-      event.stopPropagation();
-
-      if (moveButton.disabled) return;
-
-      const direction =
-        moveButton.dataset.teAction === "model-move-up" ? -1 : 1;
-
-      this.moveModelInVisibleOrder(moveButton.dataset.teId, direction);
-      return;
-    }
-
-    return teV11Original.handleRootClick.call(this, event);
-  };
-
-  TextExpressApp.prototype.isTypingTarget = function (target) {
-    if (!(target instanceof Element)) return false;
-
-    return Boolean(
-      target.closest(
-        'input, textarea, select, [contenteditable="true"], [contenteditable=""], [role="textbox"]'
-      )
-    );
-  };
-
-  TextExpressApp.prototype.onGlobalKeyDown = function (event) {
-    const canUseKeyboardMove =
-      event.altKey &&
-      !event.ctrlKey &&
-      !event.metaKey &&
-      !event.shiftKey &&
-      (event.key === "ArrowUp" || event.key === "ArrowDown") &&
-      this.canManuallyOrderCurrentList() &&
-      this.selectedId &&
-      !this.panel.classList.contains("te-hidden") &&
-      this.snippetModal.classList.contains("te-hidden") &&
-      this.variableModal.classList.contains("te-hidden") &&
-      this.settingsModal.classList.contains("te-hidden") &&
-      this.categoryModal.classList.contains("te-hidden") &&
-      !this.isTypingTarget(event.target);
-
-    if (canUseKeyboardMove) {
-      event.preventDefault();
-      event.stopPropagation();
-
-      this.moveModelInVisibleOrder(
-        this.selectedId,
-        event.key === "ArrowUp" ? -1 : 1
-      );
-      return;
-    }
-
-    return teV11Original.onGlobalKeyDown.call(this, event);
-  };
-
-
-
-  /* ==========================================================
-   * Text Express 12.0 — arrastar e soltar modelos verticalmente
-   * Atendimento e Protocolo.
-   * ========================================================== */
-  const teV12Original = Object.freeze({
+  const teV13Original = Object.freeze({
     init: TextExpressApp.prototype.init,
-    renderCardWithoutArrowButtons: teV11Original.renderCard,
+    renderCard: TextExpressApp.prototype.renderCard,
     handleRootClick: TextExpressApp.prototype.handleRootClick
   });
 
-  TextExpressApp.prototype.canDragReorderCurrentList = function () {
+  TextExpressApp.prototype.canReorderCards = function () {
     return this.activeType === "atendimento" || this.activeType === "protocolo";
   };
 
-  TextExpressApp.prototype.renderCard = function (snippet) {
+  TextExpressApp.prototype.getDragIndicatorMarkup = function () {
     /*
-     * Usa a renderização anterior à V11 para eliminar totalmente
-     * os dois botões quadrados de subir/descer.
+     * SVG direto: não passa pelo catálogo de ícones.
+     * Isso evita o erro anterior que transformava a seta em pasta.
      */
-    let html = teV12Original.renderCardWithoutArrowButtons.call(this, snippet);
+    return `
+      <span
+        class="te-card-drag-indicator"
+        aria-hidden="true"
+        title="Segure o card e arraste para cima ou para baixo">
+        <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+          <path d="m8 7 4-4 4 4"></path>
+          <path d="M12 3v18"></path>
+          <path d="m8 17 4 4 4-4"></path>
+        </svg>
+      </span>`;
+  };
 
-    if (!this.canDragReorderCurrentList()) return html;
+  TextExpressApp.prototype.renderCard = function (snippet) {
+    let html = teV13Original.renderCard.call(this, snippet);
 
+    if (!this.canReorderCards()) return html;
+
+    /*
+     * O card inteiro é arrastável. Os botões continuam excluídos
+     * pelo controle de pointerdown/dragstart abaixo.
+     */
     html = html.replace(
-      /class="te-snippet-card\b/,
-      'class="te-snippet-card te-card-draggable'
+      /<article class="te-snippet-card\b/,
+      '<article draggable="true" aria-grabbed="false" class="te-snippet-card te-card-draggable'
     );
 
-    const handle = `
-      <span
-        class="te-card-drag-handle"
-        data-te-drag-handle
-        role="img"
-        aria-label="Arraste este modelo para cima ou para baixo"
-        title="Clique no card e arraste para organizar">
-        ${this.icon("move-vertical")}
-      </span>`;
-
+    const indicator = this.getDragIndicatorMarkup();
     const actionsPattern = /(<div class="te-card-actions">)/;
 
     if (actionsPattern.test(html)) {
-      html = html.replace(actionsPattern, `$1${handle}`);
+      html = html.replace(actionsPattern, `$1${indicator}`);
     } else {
-      html = html.replace("</article>", `${handle}</article>`);
+      html = html.replace("</article>", `${indicator}</article>`);
     }
 
     return html;
   };
 
-  TextExpressApp.prototype.getVisibleCardIdsFromDom = function () {
-    return [...this.listElement.querySelectorAll(".te-snippet-card[data-te-card-id]")]
+  TextExpressApp.prototype.getVisibleCardOrder = function () {
+    return [...this.listElement.querySelectorAll(
+      ".te-snippet-card[data-te-card-id]"
+    )]
       .map((card) => card.dataset.teCardId)
       .filter(Boolean);
   };
 
-  TextExpressApp.prototype.persistDraggedCardOrder = function (orderedVisibleIds) {
-    if (!this.canDragReorderCurrentList()) return false;
+  TextExpressApp.prototype.restoreVisibleCardOrder = function (order) {
+    if (!Array.isArray(order) || !order.length) return;
+
+    const cards = new Map(
+      [...this.listElement.querySelectorAll(
+        ".te-snippet-card[data-te-card-id]"
+      )].map((card) => [card.dataset.teCardId, card])
+    );
+
+    for (const id of order) {
+      const card = cards.get(id);
+      if (card) this.listElement.appendChild(card);
+    }
+  };
+
+  TextExpressApp.prototype.saveVisibleCardOrder = function (orderedVisibleIds) {
+    if (!this.canReorderCards()) return false;
 
     const visibleItems = this.getFilteredSnippets();
-    const visibleIdSet = new Set(visibleItems.map((item) => item.id));
+    const visibleIds = visibleItems.map((item) => item.id);
+    const visibleIdSet = new Set(visibleIds);
 
     if (
-      orderedVisibleIds.length !== visibleItems.length ||
+      orderedVisibleIds.length !== visibleIds.length ||
       orderedVisibleIds.some((id) => !visibleIdSet.has(id))
     ) {
       return false;
     }
 
     /*
-     * Os itens não visíveis mantêm os próprios lugares.
-     * Somente os espaços ocupados pelos resultados visíveis
-     * recebem a nova ordem definida pelo usuário.
+     * Apenas os espaços ocupados pelos itens visíveis são reorganizados.
+     * Itens de outras abas/categorias continuam nos próprios espaços.
      */
     const visibleSlots = [];
-    const snippetById = new Map(this.snippets.map((item) => [item.id, item]));
+    const snippetsById = new Map(
+      this.snippets.map((snippet) => [snippet.id, snippet])
+    );
 
-    this.snippets.forEach((item, index) => {
-      if (visibleIdSet.has(item.id)) visibleSlots.push(index);
+    this.snippets.forEach((snippet, index) => {
+      if (visibleIdSet.has(snippet.id)) visibleSlots.push(index);
     });
 
-    const orderedItems = orderedVisibleIds
-      .map((id) => snippetById.get(id))
+    const reorderedItems = orderedVisibleIds
+      .map((id) => snippetsById.get(id))
       .filter(Boolean);
 
-    if (orderedItems.length !== visibleSlots.length) return false;
+    if (visibleSlots.length !== reorderedItems.length) return false;
 
     visibleSlots.forEach((slot, index) => {
-      this.snippets[slot] = orderedItems[index];
+      this.snippets[slot] = reorderedItems[index];
     });
 
+    /*
+     * saveSnippets já:
+     * - grava no navegador;
+     * - atualiza atalhos;
+     * - sincroniza outras abas;
+     * - inclui a ordem na exportação.
+     */
     return this.saveSnippets();
   };
 
-  TextExpressApp.prototype.setupCardDragReorder = function () {
+  TextExpressApp.prototype.setupNativeCardDragDrop = function () {
     const list = this.listElement;
-    if (!list || list.dataset.teCardDragReady === "true") return;
+    if (!list || list.dataset.teNativeDragReady === "true") return;
 
-    list.dataset.teCardDragReady = "true";
+    list.dataset.teNativeDragReady = "true";
 
-    let pointerId = null;
     let draggedCard = null;
-    let startX = 0;
-    let startY = 0;
-    let dragging = false;
-    let suppressNextClick = false;
     let initialOrder = [];
-    let previousScrollBehavior = "";
+    let droppedInsideList = false;
+    let startedOnInteractiveElement = false;
+    let suppressNextClick = false;
+    let lastPointerY = 0;
+    let autoScrollFrame = 0;
 
-    const DRAG_THRESHOLD = 7;
-    const EDGE_SCROLL_ZONE = 54;
-    const EDGE_SCROLL_SPEED = 17;
+    const INTERACTIVE_SELECTOR = [
+      "button",
+      "a",
+      "input",
+      "textarea",
+      "select",
+      "option",
+      "label",
+      '[contenteditable="true"]',
+      '[contenteditable=""]',
+      '[role="textbox"]'
+    ].join(",");
 
-    const isInteractiveTarget = (target) => {
-      if (!(target instanceof Element)) return false;
-      return Boolean(
-        target.closest(
-          "button, a, input, textarea, select, option, label, " +
-          '[contenteditable="true"], [contenteditable=""], [role="textbox"]'
-        )
-      );
+    const isInteractive = (target) => {
+      return target instanceof Element &&
+        Boolean(target.closest(INTERACTIVE_SELECTOR));
     };
 
     const findCard = (target) => {
@@ -4138,118 +3943,218 @@
       return target.closest(".te-snippet-card[data-te-card-id]");
     };
 
-    const autoScrollList = (clientY) => {
-      const rect = list.getBoundingClientRect();
-
-      if (clientY < rect.top + EDGE_SCROLL_ZONE) {
-        list.scrollTop -= EDGE_SCROLL_SPEED;
-      } else if (clientY > rect.bottom - EDGE_SCROLL_ZONE) {
-        list.scrollTop += EDGE_SCROLL_SPEED;
-      }
+    const clearDropTargets = () => {
+      list.querySelectorAll(".te-card-drop-before, .te-card-drop-after")
+        .forEach((card) => {
+          card.classList.remove("te-card-drop-before", "te-card-drop-after");
+        });
     };
 
-    const placeCardAtPointer = (clientY) => {
-      if (!draggedCard) return;
-
-      const otherCards = [
+    const getInsertionTarget = (clientY) => {
+      const candidates = [
         ...list.querySelectorAll(
           ".te-snippet-card[data-te-card-id]:not(.te-card-dragging)"
         )
       ];
 
-      const nextCard = otherCards.find((card) => {
+      for (const card of candidates) {
         const rect = card.getBoundingClientRect();
-        return clientY < rect.top + rect.height / 2;
-      });
+        const middle = rect.top + rect.height / 2;
 
-      if (nextCard) {
-        if (nextCard !== draggedCard.nextElementSibling) {
-          list.insertBefore(draggedCard, nextCard);
+        if (clientY < middle) {
+          return { card, before: true };
+        }
+      }
+
+      return { card: candidates[candidates.length - 1] || null, before: false };
+    };
+
+    const moveDraggedCard = (clientY) => {
+      if (!draggedCard) return;
+
+      clearDropTargets();
+
+      const target = getInsertionTarget(clientY);
+
+      if (!target.card) {
+        list.appendChild(draggedCard);
+        return;
+      }
+
+      if (target.before) {
+        target.card.classList.add("te-card-drop-before");
+        if (target.card !== draggedCard.nextElementSibling) {
+          list.insertBefore(draggedCard, target.card);
         }
       } else {
-        list.appendChild(draggedCard);
+        target.card.classList.add("te-card-drop-after");
+        if (target.card.nextElementSibling !== draggedCard) {
+          list.insertBefore(draggedCard, target.card.nextElementSibling);
+        }
       }
     };
 
-    const resetDragAppearance = () => {
+    const performEdgeAutoScroll = () => {
+      if (!draggedCard) {
+        autoScrollFrame = 0;
+        return;
+      }
+
+      const rect = list.getBoundingClientRect();
+      const zone = Math.min(70, Math.max(42, rect.height * 0.12));
+      let delta = 0;
+
+      if (lastPointerY < rect.top + zone) {
+        const strength = 1 - Math.max(0, lastPointerY - rect.top) / zone;
+        delta = -Math.ceil(4 + strength * 18);
+      } else if (lastPointerY > rect.bottom - zone) {
+        const strength = 1 - Math.max(0, rect.bottom - lastPointerY) / zone;
+        delta = Math.ceil(4 + strength * 18);
+      }
+
+      if (delta) {
+        list.scrollTop += delta;
+        moveDraggedCard(lastPointerY);
+      }
+
+      autoScrollFrame = window.requestAnimationFrame(performEdgeAutoScroll);
+    };
+
+    const stopAutoScroll = () => {
+      if (autoScrollFrame) {
+        window.cancelAnimationFrame(autoScrollFrame);
+        autoScrollFrame = 0;
+      }
+    };
+
+    const cleanup = () => {
+      stopAutoScroll();
+      clearDropTargets();
+
       if (draggedCard) {
         draggedCard.classList.remove("te-card-dragging");
-        draggedCard.removeAttribute("aria-grabbed");
+        draggedCard.setAttribute("aria-grabbed", "false");
       }
 
       list.classList.remove("te-list-reordering");
-      list.style.scrollBehavior = previousScrollBehavior;
-
-      pointerId = null;
       draggedCard = null;
-      dragging = false;
       initialOrder = [];
+      droppedInsideList = false;
+      startedOnInteractiveElement = false;
     };
 
-    const cancelDragAndRestore = () => {
-      if (!draggedCard || !initialOrder.length) {
-        resetDragAppearance();
-        return;
-      }
-
-      const cardsById = new Map(
-        [...list.querySelectorAll(".te-snippet-card[data-te-card-id]")]
-          .map((card) => [card.dataset.teCardId, card])
-      );
-
-      initialOrder.forEach((id) => {
-        const card = cardsById.get(id);
-        if (card) list.appendChild(card);
-      });
-
-      resetDragAppearance();
+    const restoreAndCleanup = () => {
+      this.restoreVisibleCardOrder(initialOrder);
+      cleanup();
     };
 
-    const finishDrag = (event, cancelled = false) => {
-      if (pointerId === null || event.pointerId !== pointerId) return;
+    /*
+     * Registra se o gesto começou em um botão.
+     * Dessa forma, Inserir/Editar/Excluir/Favorito não iniciam arraste.
+     */
+    list.addEventListener("pointerdown", (event) => {
+      startedOnInteractiveElement = isInteractive(event.target);
+    }, true);
 
-      try {
-        if (draggedCard?.hasPointerCapture(pointerId)) {
-          draggedCard.releasePointerCapture(pointerId);
-        }
-      } catch {}
+    list.addEventListener("dragstart", (event) => {
+      const card = findCard(event.target);
 
-      if (!dragging) {
-        resetDragAppearance();
+      if (
+        !card ||
+        !this.canReorderCards() ||
+        startedOnInteractiveElement
+      ) {
+        event.preventDefault();
         return;
       }
 
-      if (cancelled) {
-        cancelDragAndRestore();
+      draggedCard = card;
+      initialOrder = this.getVisibleCardOrder();
+      droppedInsideList = false;
+      lastPointerY = event.clientY;
+
+      card.classList.add("te-card-dragging");
+      card.setAttribute("aria-grabbed", "true");
+      list.classList.add("te-list-reordering");
+
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.dropEffect = "move";
+        event.dataTransfer.setData(
+          "text/plain",
+          card.dataset.teCardId || "text-express-card"
+        );
+
+        /*
+         * O próprio card é usado como imagem do arraste.
+         * O pequeno deslocamento evita que a imagem cubra o ponteiro.
+         */
+        try {
+          event.dataTransfer.setDragImage(card, 24, 18);
+        } catch {}
+      }
+
+      stopAutoScroll();
+      autoScrollFrame = window.requestAnimationFrame(performEdgeAutoScroll);
+    });
+
+    list.addEventListener("dragover", (event) => {
+      if (!draggedCard) return;
+
+      event.preventDefault();
+      lastPointerY = event.clientY;
+
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = "move";
+      }
+
+      moveDraggedCard(event.clientY);
+    });
+
+    list.addEventListener("dragenter", (event) => {
+      if (!draggedCard) return;
+      event.preventDefault();
+    });
+
+    list.addEventListener("drop", (event) => {
+      if (!draggedCard) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      droppedInsideList = true;
+
+      moveDraggedCard(event.clientY);
+
+      const draggedId = draggedCard.dataset.teCardId;
+      const newOrder = this.getVisibleCardOrder();
+      const changed = newOrder.join("|") !== initialOrder.join("|");
+      const savedScrollTop = list.scrollTop;
+
+      if (!changed) {
+        cleanup();
         return;
       }
 
-      const draggedId = draggedCard?.dataset.teCardId;
-      const finalOrder = this.getVisibleCardIdsFromDom();
-      const changed = finalOrder.join("|") !== initialOrder.join("|");
+      const saved = this.saveVisibleCardOrder(newOrder);
 
-      resetDragAppearance();
-
-      if (!changed) return;
-
-      if (!this.persistDraggedCardOrder(finalOrder)) {
+      if (!saved) {
+        restoreAndCleanup();
         this.renderSnippets();
         this.showToast("Não foi possível salvar a nova ordem.", "error");
         return;
       }
 
       this.selectedId = draggedId || this.selectedId;
-      const savedScrollTop = list.scrollTop;
-
+      cleanup();
       this.renderSnippets();
 
       window.requestAnimationFrame(() => {
         list.scrollTop = savedScrollTop;
 
-        const selectedCard = [...list.querySelectorAll("[data-te-card-id]")]
+        const movedCard = [...list.querySelectorAll("[data-te-card-id]")]
           .find((card) => card.dataset.teCardId === draggedId);
 
-        selectedCard?.scrollIntoView({
+        movedCard?.scrollIntoView({
           behavior: "smooth",
           block: "nearest",
           inline: "nearest"
@@ -4261,71 +4166,18 @@
         suppressNextClick = false;
       }, 220);
 
-      this.showToast("Nova ordem salva.", "success", 2200);
-    };
-
-    list.addEventListener("pointerdown", (event) => {
-      if (!this.canDragReorderCurrentList()) return;
-      if (event.pointerType === "mouse" && event.button !== 0) return;
-      if (isInteractiveTarget(event.target)) return;
-
-      const card = findCard(event.target);
-      if (!card) return;
-
-      pointerId = event.pointerId;
-      draggedCard = card;
-      startX = event.clientX;
-      startY = event.clientY;
-      dragging = false;
-      initialOrder = this.getVisibleCardIdsFromDom();
-      previousScrollBehavior = list.style.scrollBehavior;
+      this.showToast("Nova posição salva.", "success", 2300);
     });
 
-    list.addEventListener("pointermove", (event) => {
-      if (
-        pointerId === null ||
-        event.pointerId !== pointerId ||
-        !draggedCard
-      ) {
-        return;
-      }
-
-      const deltaX = event.clientX - startX;
-      const deltaY = event.clientY - startY;
-
-      if (!dragging) {
-        const verticalIntent =
-          Math.abs(deltaY) >= DRAG_THRESHOLD &&
-          Math.abs(deltaY) > Math.abs(deltaX);
-
-        if (!verticalIntent) return;
-
-        dragging = true;
-        list.classList.add("te-list-reordering");
-        draggedCard.classList.add("te-card-dragging");
-        draggedCard.setAttribute("aria-grabbed", "true");
-        list.style.scrollBehavior = "auto";
-
-        try {
-          draggedCard.setPointerCapture(pointerId);
-        } catch {}
-      }
-
-      event.preventDefault();
-      autoScrollList(event.clientY);
-      placeCardAtPointer(event.clientY);
-    });
-
-    list.addEventListener("pointerup", (event) => finishDrag(event, false));
-    list.addEventListener("pointercancel", (event) => finishDrag(event, true));
-
-    list.addEventListener("lostpointercapture", (event) => {
-      if (
-        pointerId !== null &&
-        event.pointerId === pointerId &&
-        dragging
-      ) {
-        cancelDragAndRestore();
+    list.addEventListener("dragend", () => {
+      /*
+       * Soltar fora da lista cancela e restaura a ordem anterior.
+       * Soltar dentro da lista já foi tratado pelo evento drop.
+       */
+      if (draggedCard && !droppedInsideList) {
+        restoreAndCleanup();
+      } else if (draggedCard) {
+        cleanup();
       }
     });
 
@@ -4340,16 +4192,14 @@
       true
     );
 
-    /*
-     * Esc cancela um arraste ainda em andamento e restaura
-     * exatamente a ordem anterior.
-     */
     document.addEventListener(
       "keydown",
       (event) => {
-        if (event.key !== "Escape" || !dragging) return;
+        if (event.key !== "Escape" || !draggedCard) return;
+
         event.preventDefault();
-        cancelDragAndRestore();
+        restoreAndCleanup();
+        this.showToast("Movimento cancelado.", "success", 1800);
       },
       true
     );
@@ -4357,25 +4207,15 @@
 
   TextExpressApp.prototype.handleRootClick = function (event) {
     /*
-     * Os antigos botões da V11 não são mais renderizados.
-     * Este bloqueio apenas evita ações caso exista HTML antigo em cache.
+     * Mantém o tratamento normal dos cards e seus botões.
+     * Não existem botões separados para subir ou descer.
      */
-    const oldMoveButton = event.target.closest(
-      '[data-te-action="model-move-up"], [data-te-action="model-move-down"]'
-    );
-
-    if (oldMoveButton) {
-      event.preventDefault();
-      event.stopPropagation();
-      return;
-    }
-
-    return teV12Original.handleRootClick.call(this, event);
+    return teV13Original.handleRootClick.call(this, event);
   };
 
   TextExpressApp.prototype.init = function () {
-    const result = teV12Original.init.call(this);
-    this.setupCardDragReorder();
+    const result = teV13Original.init.call(this);
+    this.setupNativeCardDragDrop();
     return result;
   };
 
