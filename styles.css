@@ -2955,3 +2955,86 @@
 #text-express-app .te-category-bar.te-dragging .te-category-add-button {
   pointer-events: none !important;
 }
+
+/* ==========================================================
+   Text Express 11.0 — ordenação manual de Atendimento/Protocolo
+   ========================================================== */
+
+#text-express-app .te-card-order-controls {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  overflow: hidden;
+  margin-left: 2px;
+  border: 1px solid var(--te-border);
+  border-radius: 7px;
+  background: var(--te-surface-2);
+}
+
+#text-express-app .te-order-button {
+  display: inline-grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--te-muted);
+  cursor: pointer;
+}
+
+#text-express-app .te-order-button + .te-order-button {
+  border-left: 1px solid var(--te-border);
+}
+
+#text-express-app .te-order-button .te-icon {
+  width: 13px;
+  height: 13px;
+}
+
+#text-express-app .te-order-button:hover:not(:disabled),
+#text-express-app .te-order-button:focus-visible:not(:disabled) {
+  background: var(--te-primary-soft);
+  color: var(--te-primary);
+}
+
+#text-express-app .te-order-button:focus-visible {
+  position: relative;
+  z-index: 2;
+  outline: 2px solid color-mix(in srgb, var(--te-primary) 68%, transparent);
+  outline-offset: -2px;
+}
+
+#text-express-app .te-order-button:disabled {
+  opacity: .28;
+  cursor: not-allowed;
+}
+
+/* Mantém os controles próximos de Editar/Excluir. */
+#text-express-app .te-card-actions .te-card-order-controls {
+  order: 2;
+}
+
+#text-express-app .te-card-actions .te-card-insert {
+  order: 1;
+}
+
+#text-express-app .te-card-actions [data-te-action="edit"] {
+  order: 3;
+}
+
+#text-express-app .te-card-actions [data-te-action="delete"] {
+  order: 4;
+}
+
+/* Em telas estreitas, os botões continuam utilizáveis sem aumentar o card. */
+@media (max-width: 540px) {
+  #text-express-app .te-card-order-controls {
+    border-radius: 6px;
+  }
+
+  #text-express-app .te-order-button {
+    width: 27px;
+    height: 27px;
+  }
+}

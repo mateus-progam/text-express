@@ -1,12 +1,12 @@
 /*
- * Text Express 10.0.0
+ * Text Express 11.0.0
  * Expansor de textos para atendimento e registro de protocolos.
  * Sem dependências externas.
  */
 (() => {
   "use strict";
 
-  const APP_VERSION = "10.0.0";
+  const APP_VERSION = "11.0.0";
   const STORAGE_KEYS = Object.freeze({
     snippets: "text_express_snippets",
     darkMode: "te_dark_mode",
@@ -3773,6 +3773,240 @@
       favoritos: 0
     };
     return teV10Original.init.call(this);
+  };
+
+
+
+  /* ==========================================================
+   * Text Express 11.0 — ordenação manual dos modelos
+   * Disponível em Atendimento e Protocolo.
+   * A ordem é a própria ordem do array salvo no navegador.
+   * ========================================================== */
+  const teV11Original = Object.freeze({
+    renderCard: TextExpressApp.prototype.renderCard,
+    handleRootClick: TextExpressApp.prototype.handleRootClick,
+    onGlobalKeyDown: TextExpressApp.prototype.onGlobalKeyDown
+  });
+
+  TextExpressApp.prototype.canManuallyOrderCurrentList = function () {
+    return this.activeType === "atendimento" || this.activeType === "protocolo";
+  };
+
+  TextExpressApp.prototype.getVisibleOrderState = function (snippetId) {
+    if (!this.canManuallyOrderCurrentList()) {
+      return {
+        enabled: false,
+        index: -1,
+        total: 0,
+        canMoveUp: false,
+        canMoveDown: false
+      };
+    }
+
+    const visibleItems = this.getFilteredSnippets();
+    const index = visibleItems.findIndex((item) => item.id === snippetId);
+
+    return {
+      enabled: index >= 0,
+      index,
+      total: visibleItems.length,
+      canMoveUp: index > 0,
+      canMoveDown: index >= 0 && index < visibleItems.length - 1
+    };
+  };
+
+  TextExpressApp.prototype.renderOrderControls = function (snippet) {
+    const state = this.getVisibleOrderState(snippet.id);
+    if (!state.enabled) return "";
+
+    const positionLabel = `${state.index + 1} de ${state.total}`;
+
+    return `
+      <span
+        class="te-card-order-controls"
+        role="group"
+        aria-label="Organizar posição do modelo. Posição ${positionLabel}"
+        title="Posição ${positionLabel}">
+        <button
+          class="te-order-button"
+          type="button"
+          data-te-action="model-move-up"
+          data-te-id="${this.escapeAttr(snippet.id)}"
+          title="Mover para cima"
+          aria-label="Mover ${this.escapeAttr(snippet.nome)} para cima"
+          ${state.canMoveUp ? "" : "disabled"}>
+          ${this.icon("chevron-up")}
+        </button>
+        <button
+          class="te-order-button"
+          type="button"
+          data-te-action="model-move-down"
+          data-te-id="${this.escapeAttr(snippet.id)}"
+          title="Mover para baixo"
+          aria-label="Mover ${this.escapeAttr(snippet.nome)} para baixo"
+          ${state.canMoveDown ? "" : "disabled"}>
+          ${this.icon("chevron-down")}
+        </button>
+      </span>`;
+  };
+
+  TextExpressApp.prototype.renderCard = function (snippet) {
+    const html = teV11Original.renderCard.call(this, snippet);
+    const controls = this.renderOrderControls(snippet);
+
+    if (!controls) return html;
+
+    /*
+     * Os botões são posicionados antes do botão Editar, mantendo:
+     * inserir/abrir, ordenar, editar e excluir.
+     */
+    const editButtonPattern =
+      /(<button class="te-icon-action" type="button" data-te-action="edit")/;
+
+    if (editButtonPattern.test(html)) {
+      return html.replace(editButtonPattern, `${controls}$1`);
+    }
+
+    return html.replace("</article>", `${controls}</article>`);
+  };
+
+  TextExpressApp.prototype.getManualOrderItems = function () {
+    return this.canManuallyOrderCurrentList()
+      ? this.getFilteredSnippets()
+      : [];
+  };
+
+  TextExpressApp.prototype.moveModelInVisibleOrder = function (snippetId, direction) {
+    if (!this.canManuallyOrderCurrentList()) return false;
+
+    const step = direction < 0 ? -1 : 1;
+    const visibleItems = this.getManualOrderItems();
+    const visibleIndex = visibleItems.findIndex((item) => item.id === snippetId);
+    const targetVisibleIndex = visibleIndex + step;
+
+    if (
+      visibleIndex < 0 ||
+      targetVisibleIndex < 0 ||
+      targetVisibleIndex >= visibleItems.length
+    ) {
+      return false;
+    }
+
+    const currentItem = visibleItems[visibleIndex];
+    const targetItem = visibleItems[targetVisibleIndex];
+    const currentIndex = this.snippets.findIndex(
+      (item) => item.id === currentItem.id
+    );
+    const targetIndex = this.snippets.findIndex(
+      (item) => item.id === targetItem.id
+    );
+
+    if (currentIndex < 0 || targetIndex < 0) return false;
+
+    /*
+     * A troca ocorre no array principal. Por isso:
+     * - continua válida ao mudar de categoria;
+     * - é persistida pelo saveSnippets;
+     * - entra na exportação;
+     * - é sincronizada entre abas.
+     */
+    [this.snippets[currentIndex], this.snippets[targetIndex]] = [
+      this.snippets[targetIndex],
+      this.snippets[currentIndex]
+    ];
+
+    this.selectedId = snippetId;
+
+    const saved = this.saveSnippets();
+    if (!saved) return false;
+
+    this.renderSnippets();
+
+    window.requestAnimationFrame(() => {
+      const card = this.listElement.querySelector(
+        `[data-te-card-id="${CSS.escape(snippetId)}"]`
+      );
+
+      if (card) {
+        card.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+          inline: "nearest"
+        });
+      }
+    });
+
+    const newPosition = targetVisibleIndex + 1;
+    const directionLabel = step < 0 ? "cima" : "baixo";
+
+    this.showToast(
+      `Modelo movido para ${directionLabel}. Nova posição: ${newPosition}.`,
+      "success",
+      2200
+    );
+
+    return true;
+  };
+
+  TextExpressApp.prototype.handleRootClick = function (event) {
+    const moveButton = event.target.closest(
+      '[data-te-action="model-move-up"], [data-te-action="model-move-down"]'
+    );
+
+    if (moveButton) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (moveButton.disabled) return;
+
+      const direction =
+        moveButton.dataset.teAction === "model-move-up" ? -1 : 1;
+
+      this.moveModelInVisibleOrder(moveButton.dataset.teId, direction);
+      return;
+    }
+
+    return teV11Original.handleRootClick.call(this, event);
+  };
+
+  TextExpressApp.prototype.isTypingTarget = function (target) {
+    if (!(target instanceof Element)) return false;
+
+    return Boolean(
+      target.closest(
+        'input, textarea, select, [contenteditable="true"], [contenteditable=""], [role="textbox"]'
+      )
+    );
+  };
+
+  TextExpressApp.prototype.onGlobalKeyDown = function (event) {
+    const canUseKeyboardMove =
+      event.altKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.shiftKey &&
+      (event.key === "ArrowUp" || event.key === "ArrowDown") &&
+      this.canManuallyOrderCurrentList() &&
+      this.selectedId &&
+      !this.panel.classList.contains("te-hidden") &&
+      this.snippetModal.classList.contains("te-hidden") &&
+      this.variableModal.classList.contains("te-hidden") &&
+      this.settingsModal.classList.contains("te-hidden") &&
+      this.categoryModal.classList.contains("te-hidden") &&
+      !this.isTypingTarget(event.target);
+
+    if (canUseKeyboardMove) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      this.moveModelInVisibleOrder(
+        this.selectedId,
+        event.key === "ArrowUp" ? -1 : 1
+      );
+      return;
+    }
+
+    return teV11Original.onGlobalKeyDown.call(this, event);
   };
 
 
