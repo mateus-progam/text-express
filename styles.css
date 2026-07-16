@@ -3497,3 +3497,37 @@
     width: calc(100vw - 16px);
   }
 }
+
+/* ==========================================================
+   Text Express 20.0 — correção da janela de importação
+   ========================================================== */
+
+#text-express-app .te-import-choice-overlay {
+  pointer-events: auto !important;
+}
+
+#text-express-app .te-import-choice-dialog,
+#text-express-app .te-import-choice-dialog *,
+#text-express-app .te-import-option,
+#text-express-app .te-import-choice-close {
+  pointer-events: auto !important;
+}
+
+#text-express-app .te-import-choice-header h2 {
+  color: var(--te-text) !important;
+}
+
+#text-express-app .te-import-option {
+  position: relative;
+  z-index: 1;
+}
+
+#text-express-app .te-import-option:active {
+  transform: translateY(1px);
+}
+
+#text-express-app .te-import-option:focus-visible,
+#text-express-app .te-import-choice-close:focus-visible {
+  outline: 2px solid var(--te-primary);
+  outline-offset: 2px;
+}

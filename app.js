@@ -1,12 +1,12 @@
 /*
- * Text Express 19.0.0
+ * Text Express 20.0.0
  * Expansor de textos para atendimento e registro de protocolos.
  * Sem dependências externas.
  */
 (() => {
   "use strict";
 
-  const APP_VERSION = "19.0.0";
+  const APP_VERSION = "20.0.0";
   const STORAGE_KEYS = Object.freeze({
     snippets: "text_express_snippets",
     darkMode: "te_dark_mode",
@@ -6140,6 +6140,169 @@
     this.render();
     this.restoreCurrentUiPositions();
 
+    return result;
+  };
+
+
+
+  /* ==========================================================
+   * Text Express 20.0 — janela de importação clicável
+   * ========================================================== */
+  const teV20Original = Object.freeze({
+    init: TextExpressApp.prototype.init,
+    ensureImportChoiceDialog:
+      TextExpressApp.prototype.ensureImportChoiceDialog,
+    requestImportChoice:
+      TextExpressApp.prototype.requestImportChoice,
+    finishImportChoice:
+      TextExpressApp.prototype.finishImportChoice
+  });
+
+  TextExpressApp.prototype.ensureImportChoiceDialog = function () {
+    teV20Original.ensureImportChoiceDialog.call(this);
+
+    const overlay = this.importChoiceDialog;
+    if (!overlay) return;
+
+    /*
+     * O elemento raiz do Text Express usa pointer-events:none para não
+     * bloquear a página hospedeira. A janela precisa reativar cliques.
+     */
+    overlay.style.pointerEvents = "auto";
+    overlay.setAttribute("aria-hidden", "true");
+
+    if (overlay.dataset.teV20ClickReady === "true") return;
+    overlay.dataset.teV20ClickReady = "true";
+
+    const executeChoice = (choice, event) => {
+      event?.preventDefault();
+      event?.stopPropagation();
+      event?.stopImmediatePropagation();
+
+      this.finishImportChoice(
+        choice === "cancel" ? null : choice
+      );
+    };
+
+    overlay
+      .querySelectorAll("[data-te-import-choice]")
+      .forEach((button) => {
+        button.style.pointerEvents = "auto";
+
+        button.addEventListener(
+          "click",
+          (event) => {
+            executeChoice(
+              button.dataset.teImportChoice,
+              event
+            );
+          },
+          true
+        );
+
+        /*
+         * Alguns sistemas interceptam o click, mas não o pointerup.
+         * Este fallback garante resposta ao botão esquerdo e ao toque.
+         */
+        button.addEventListener(
+          "pointerup",
+          (event) => {
+            if (
+              event.pointerType === "mouse" &&
+              event.button !== 0
+            ) {
+              return;
+            }
+
+            if (
+              button.dataset.teV20PointerExecuted === "true"
+            ) {
+              return;
+            }
+
+            button.dataset.teV20PointerExecuted = "true";
+
+            window.setTimeout(() => {
+              delete button.dataset.teV20PointerExecuted;
+            }, 250);
+
+            executeChoice(
+              button.dataset.teImportChoice,
+              event
+            );
+          },
+          true
+        );
+      });
+
+    document.addEventListener(
+      "keydown",
+      (event) => {
+        if (
+          event.key !== "Escape" ||
+          overlay.classList.contains("te-hidden")
+        ) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        this.finishImportChoice(null);
+      },
+      true
+    );
+  };
+
+  TextExpressApp.prototype.requestImportChoice = function (
+    file,
+    parsed,
+    snippetCount,
+    categoryCount
+  ) {
+    this.ensureImportChoiceDialog();
+
+    const promise = teV20Original.requestImportChoice.call(
+      this,
+      file,
+      parsed,
+      snippetCount,
+      categoryCount
+    );
+
+    this.importChoiceDialog.setAttribute(
+      "aria-hidden",
+      "false"
+    );
+
+    window.requestAnimationFrame(() => {
+      const primary = this.importChoiceDialog.querySelector(
+        '[data-te-import-choice="replace"]'
+      );
+      primary?.focus({ preventScroll: true });
+    });
+
+    return promise;
+  };
+
+  TextExpressApp.prototype.finishImportChoice = function (
+    choice
+  ) {
+    if (this.importChoiceDialog) {
+      this.importChoiceDialog.setAttribute(
+        "aria-hidden",
+        "true"
+      );
+    }
+
+    return teV20Original.finishImportChoice.call(
+      this,
+      choice
+    );
+  };
+
+  TextExpressApp.prototype.init = function () {
+    const result = teV20Original.init.call(this);
+    this.ensureImportChoiceDialog();
     return result;
   };
 

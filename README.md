@@ -1,48 +1,40 @@
-# Text Express 19.0
+# Text Express 20.0
 
-## Estado visual salvo automaticamente
+## Janela de importação corrigida
 
-Ao fechar, minimizar, atualizar a página ou abrir novamente o Text Express,
-o sistema recupera:
+A janela de escolha aparecia, mas os botões não respondiam.
 
-- última aba aberta: Atendimento, Protocolo ou Favoritos;
-- última categoria selecionada em cada aba;
-- posição horizontal da faixa de categorias em cada aba;
-- pesquisa digitada em cada aba;
-- posição vertical da lista de modelos em cada categoria;
-- último card selecionado em cada visualização.
+### Causa
 
-As posições do painel principal e do pequeno launcher já continuavam salvas
-e permanecem funcionando.
+O elemento raiz do Text Express utiliza `pointer-events: none` para não
+bloquear os cliques do sistema onde o bookmarklet está aberto.
 
-## Ordem das categorias
+O painel principal reativava os cliques, mas a janela de importação não.
+Por isso ela era exibida sem permitir interação.
 
-A ordem definida pelo usuário ao mover categorias já é salva dentro das
-próprias categorias. Nesta versão, além dessa ordem, também é salva a
-posição horizontal da faixa. Assim, ao abrir novamente, a faixa volta ao
-mesmo ponto em que estava.
+### Correções
 
-## Backup completo
+- a janela de importação agora recebe cliques;
+- Restaurar backup completo funciona;
+- Mesclar com os dados atuais funciona;
+- o botão X funciona;
+- clicar no fundo fecha a janela;
+- Esc cancela e fecha;
+- suporte adicional a pointerup para sites que interceptam click;
+- foco inicial no botão Restaurar backup completo;
+- contraste do título corrigido.
 
-Os novos backups passam a incluir `uiState`, com o estado visual da
-interface.
+## Como restaurar no outro navegador
 
-Ao escolher **Restaurar backup completo** em outro navegador, também são
-restaurados:
-
-- aba aberta;
-- categoria ativa;
-- pesquisas;
-- rolagens;
-- card selecionado;
-- posição horizontal das categorias.
-
-Backups antigos continuam compatíveis. Quando não possuem `uiState`, o
-Text Express utiliza a visualização padrão.
+1. Abra o Text Express dentro do mesmo sistema onde será utilizado.
+2. Clique em Importar.
+3. Selecione o backup.
+4. Clique em Restaurar backup completo.
+5. Aguarde a mensagem de conclusão.
 
 ## Atualização
 
-Envie para a raiz do GitHub:
+Envie para o GitHub:
 
 - index.html
 - styles.css
