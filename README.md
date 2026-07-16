@@ -1,45 +1,72 @@
-# Text Express 20.0
+# Text Express 21.0
 
-## Janela de importação corrigida
+Ferramenta flutuante para localizar, visualizar, inserir e organizar textos de Atendimento e Protocolo.
 
-A janela de escolha aparecia, mas os botões não respondiam.
+## Alterações da versão 21.0
 
-### Causa
+### Visualização dos cards
 
-O elemento raiz do Text Express utiliza `pointer-events: none` para não
-bloquear os cliques do sistema onde o bookmarklet está aberto.
+- clicar em qualquer card abre imediatamente o conteúdo completo no painel direito;
+- sequências exibem todas as falas, campos e etapas;
+- modelos únicos e protocolos exibem o texto integral;
+- o card aberto fica destacado;
+- a seleção continua sendo salva no estado visual;
+- também é possível abrir o card com Enter ou Espaço quando ele estiver focado.
 
-O painel principal reativava os cliques, mas a janela de importação não.
-Por isso ela era exibida sem permitir interação.
+### Atalhos separados por área
 
-### Correções
+- na aba Atendimento, os atalhos procuram somente modelos de Atendimento;
+- na aba Protocolo, os atalhos procuram somente modelos de Protocolo;
+- o mesmo atalho pode existir uma vez em Atendimento e uma vez em Protocolo, com textos diferentes;
+- atalhos repetidos dentro da mesma área continuam sendo impedidos;
+- em Favoritos, o atalho acompanha o tipo do card favorito selecionado.
 
-- a janela de importação agora recebe cliques;
-- Restaurar backup completo funciona;
-- Mesclar com os dados atuais funciona;
-- o botão X funciona;
-- clicar no fundo fecha a janela;
-- Esc cancela e fecha;
-- suporte adicional a pointerup para sites que interceptam click;
-- foco inicial no botão Restaurar backup completo;
-- contraste do título corrigido.
+Exemplo:
 
-## Como restaurar no outro navegador
+- Atendimento: `/semconexao` pode inserir uma resposta ao cliente;
+- Protocolo: `/semconexao` pode inserir um registro técnico diferente.
 
-1. Abra o Text Express dentro do mesmo sistema onde será utilizado.
-2. Clique em Importar.
-3. Selecione o backup.
-4. Clique em Restaurar backup completo.
-5. Aguarde a mensagem de conclusão.
+## Favorito compacto
 
-## Atualização
+Salve o código abaixo como endereço de um favorito do navegador:
 
-Envie para o GitHub:
+```javascript
+javascript:(()=>{const s=document.createElement('script');s.src='https://king-programador.github.io/text-express/bookmarklet.js?v='+Date.now();(document.head||document.documentElement).appendChild(s)})()
+```
 
-- index.html
-- styles.css
-- app.js
-- bookmarklet.js
-- README.md
+Toda a lógica de carregamento fica no arquivo `bookmarklet.js`. Por isso, o comando salvo no favorito fica pequeno.
 
-Depois pressione Ctrl + F5.
+O endereço já está configurado para a conta **King-Programador**. No GitHub Pages, o domínio é exibido em minúsculas: `king-programador.github.io`.
+
+## Arquivos para o GitHub
+
+Envie somente:
+
+- `index.html`
+- `styles.css`
+- `app.js`
+- `bookmarklet.js`
+- `README.md`
+
+Depois da publicação, pressione `Ctrl + F5` no sistema de trabalho.
+
+## Dados existentes
+
+A versão 21.0 preserva:
+
+- dados do `localStorage`;
+- modelos e categorias;
+- sequências de Atendimento;
+- Protocolos;
+- favoritos;
+- importação completa e mesclagem;
+- nome do atendente memorizado;
+- salvamento automático;
+- posições e estado visual.
+
+
+## Correção do endereço do GitHub
+
+- repositório: `https://github.com/King-Programador/text-express`;
+- GitHub Pages: `https://king-programador.github.io/text-express/`;
+- o `bookmarklet.js` também usa esse novo endereço como fallback.

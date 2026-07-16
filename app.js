@@ -1,12 +1,12 @@
 /*
- * Text Express 20.0.0
+ * Text Express 21.0.0
  * Expansor de textos para atendimento e registro de protocolos.
  * Sem dependências externas.
  */
 (() => {
   "use strict";
 
-  const APP_VERSION = "20.0.0";
+  const APP_VERSION = "21.0.0";
   const STORAGE_KEYS = Object.freeze({
     snippets: "text_express_snippets",
     darkMode: "te_dark_mode",
@@ -6306,6 +6306,552 @@
     return result;
   };
 
+
+  /* ==========================================================
+   * Text Express 21.0 — visualização por card, atalhos por área
+   * e carregador externo compacto para o favorito.
+   * ========================================================== */
+  const teV21Original = Object.freeze({
+    init: TextExpressApp.prototype.init,
+    handleRootClick: TextExpressApp.prototype.handleRootClick,
+    renderCard: TextExpressApp.prototype.renderCard,
+    switchToSavedUiType: TextExpressApp.prototype.switchToSavedUiType,
+    mergeImportedBackup: TextExpressApp.prototype.mergeImportedBackup
+  });
+
+  TextExpressApp.prototype.getSnippetShortcutValues = function (snippet) {
+    if (!snippet) return [];
+
+    const values = [];
+    if (snippet.atalho) values.push(this.normalizeShortcut(snippet.atalho));
+
+    if (
+      snippet.tipo === "atendimento" &&
+      snippet.modelo === "fluxo" &&
+      Array.isArray(snippet.etapas)
+    ) {
+      for (const step of snippet.etapas) {
+        if (step?.atalho) values.push(this.normalizeShortcut(step.atalho));
+      }
+    }
+
+    return values;
+  };
+
+  TextExpressApp.prototype.getUsedShortcutsForType = function (
+    type,
+    ignoreModelId = null
+  ) {
+    const normalizedType = type === "protocolo" ? "protocolo" : "atendimento";
+    const used = new Set();
+
+    for (const snippet of this.snippets) {
+      if (snippet.id === ignoreModelId || snippet.tipo !== normalizedType) continue;
+      this.getSnippetShortcutValues(snippet).forEach((shortcut) => used.add(shortcut));
+    }
+
+    return used;
+  };
+
+  TextExpressApp.prototype.ensureUniqueSnippetShortcuts = function (
+    snippet,
+    usedShortcuts
+  ) {
+    const used = usedShortcuts || new Set();
+    const originalParent = snippet.atalho;
+
+    snippet.atalho = this.makeUniqueShortcut(snippet.atalho, used);
+    used.add(snippet.atalho);
+
+    let renamed = snippet.atalho !== originalParent ? 1 : 0;
+
+    if (
+      snippet.tipo === "atendimento" &&
+      snippet.modelo === "fluxo" &&
+      Array.isArray(snippet.etapas)
+    ) {
+      snippet.etapas = snippet.etapas.map((step, index) => {
+        const normalizedStep = this.normalizeFlowStep(
+          step,
+          index,
+          snippet.atalho
+        );
+        const originalStep = normalizedStep.atalho;
+        normalizedStep.atalho = this.makeUniqueShortcut(
+          normalizedStep.atalho,
+          used
+        );
+        used.add(normalizedStep.atalho);
+        if (normalizedStep.atalho !== originalStep) renamed += 1;
+        return normalizedStep;
+      });
+
+      snippet.conteudo = snippet.etapas
+        .map((step) => step.conteudo)
+        .join("\n\n");
+      snippet.variaveis = [
+        ...new Set(snippet.etapas.flatMap((step) => step.variaveis || []))
+      ];
+    }
+
+    return renamed;
+  };
+
+  TextExpressApp.prototype.normalizeCollection = function (items) {
+    const ids = new Set();
+    const usedByType = {
+      atendimento: new Set(),
+      protocolo: new Set()
+    };
+    const normalized = [];
+
+    for (const raw of items || []) {
+      const item = this.normalizeSnippet(raw);
+
+      if (!item.nome) continue;
+      if (item.modelo === "fluxo" && !item.etapas.length) continue;
+      if (item.modelo !== "fluxo" && !item.conteudo) continue;
+
+      if (ids.has(item.id)) item.id = this.generateId(item.tipo);
+      ids.add(item.id);
+
+      this.ensureUniqueSnippetShortcuts(
+        item,
+        usedByType[item.tipo]
+      );
+
+      normalized.push(item);
+    }
+
+    return normalized;
+  };
+
+  TextExpressApp.prototype.getAllShortcutOwners = function (
+    ignoreModelId = null,
+    requestedType = null
+  ) {
+    const formType = this.root
+      ?.querySelector('input[name="te-type"]:checked')
+      ?.value;
+    const currentSnippet = ignoreModelId
+      ? this.snippets.find((snippet) => snippet.id === ignoreModelId)
+      : null;
+    const type = requestedType === "protocolo" || requestedType === "atendimento"
+      ? requestedType
+      : formType === "protocolo" || formType === "atendimento"
+        ? formType
+        : currentSnippet?.tipo === "protocolo"
+          ? "protocolo"
+          : "atendimento";
+
+    const owners = new Map();
+
+    for (const snippet of this.snippets) {
+      if (snippet.id === ignoreModelId || snippet.tipo !== type) continue;
+
+      owners.set(this.normalizeShortcut(snippet.atalho), snippet.nome);
+
+      if (snippet.modelo === "fluxo") {
+        for (const step of snippet.etapas || []) {
+          owners.set(
+            this.normalizeShortcut(step.atalho),
+            `${snippet.nome} — ${step.nome}`
+          );
+        }
+      }
+    }
+
+    return owners;
+  };
+
+  TextExpressApp.prototype.getAvailableSuggestedShortcut = function () {
+    const name = this.root.querySelector("#te-form-name")?.value || "modelo";
+    const type = this.root
+      .querySelector('input[name="te-type"]:checked')
+      ?.value === "protocolo"
+      ? "protocolo"
+      : "atendimento";
+    const used = this.getUsedShortcutsForType(type, this.editingId);
+
+    return this.makeUniqueShortcut(
+      this.suggestShortcutFromName(name),
+      used
+    );
+  };
+
+  TextExpressApp.prototype.validateShortcutField = function () {
+    const field = this.root.querySelector("#te-form-shortcut");
+    const shortcut = this.normalizeShortcut(field.value);
+    const type = this.root
+      .querySelector('input[name="te-type"]:checked')
+      ?.value === "protocolo"
+      ? "protocolo"
+      : "atendimento";
+
+    field.value = shortcut;
+
+    const owner = this.getAllShortcutOwners(
+      this.editingId,
+      type
+    ).get(shortcut);
+
+    this.setFormError(
+      "shortcut",
+      owner ? `Esse atalho já pertence a “${owner}” nesta área.` : ""
+    );
+
+    return !owner;
+  };
+
+  TextExpressApp.prototype.createShortcutEntry = function (
+    snippet,
+    step = null,
+    stepIndex = -1
+  ) {
+    if (step) {
+      return {
+        kind: "flow-step",
+        snippet,
+        step,
+        stepIndex,
+        triggerKey: step.triggerKey
+      };
+    }
+
+    if (snippet.modelo === "fluxo" && snippet.tipo === "atendimento") {
+      return {
+        kind: "flow",
+        snippet,
+        triggerKey: snippet.triggerKey
+      };
+    }
+
+    return {
+      kind: "snippet",
+      snippet,
+      triggerKey: snippet.triggerKey
+    };
+  };
+
+  TextExpressApp.prototype.rebuildShortcutMap = function () {
+    this.shortcutMapsByType = {
+      atendimento: new Map(),
+      protocolo: new Map()
+    };
+
+    for (const snippet of this.snippets) {
+      if (!snippet.ativo || !snippet.atalho) continue;
+
+      const map = this.shortcutMapsByType[snippet.tipo];
+      if (!map) continue;
+
+      map.set(
+        this.normalizeShortcut(snippet.atalho),
+        this.createShortcutEntry(snippet)
+      );
+
+      if (
+        snippet.tipo === "atendimento" &&
+        snippet.modelo === "fluxo"
+      ) {
+        (snippet.etapas || []).forEach((step, index) => {
+          if (!step.atalho) return;
+          map.set(
+            this.normalizeShortcut(step.atalho),
+            this.createShortcutEntry(snippet, step, index)
+          );
+        });
+      }
+    }
+
+    const scope = this.getShortcutScopeType?.() || "atendimento";
+    this.shortcutMap = this.shortcutMapsByType[scope] || new Map();
+  };
+
+  TextExpressApp.prototype.getShortcutScopeType = function () {
+    if (this.activeType === "protocolo") return "protocolo";
+    if (this.activeType === "atendimento") return "atendimento";
+
+    const selected = this.snippets.find(
+      (snippet) => snippet.id === this.selectedId && snippet.favorito
+    );
+
+    if (selected) return selected.tipo;
+    return this.lastShortcutType === "protocolo"
+      ? "protocolo"
+      : "atendimento";
+  };
+
+  TextExpressApp.prototype.getShortcutMapForCurrentView = function () {
+    const type = this.getShortcutScopeType();
+    const source = this.shortcutMapsByType?.[type] || new Map();
+
+    if (this.activeType !== "favoritos") return source;
+
+    const favoritesOnly = new Map();
+    for (const [shortcut, entry] of source.entries()) {
+      if (entry?.snippet?.favorito) favoritesOnly.set(shortcut, entry);
+    }
+    return favoritesOnly;
+  };
+
+  TextExpressApp.prototype.findShortcutBeforeCaret = function (
+    element,
+    triggerKey
+  ) {
+    let before = "";
+
+    if (
+      element instanceof HTMLInputElement ||
+      element instanceof HTMLTextAreaElement
+    ) {
+      const caret = typeof element.selectionStart === "number"
+        ? element.selectionStart
+        : element.value.length;
+
+      if (element.selectionStart !== element.selectionEnd) return null;
+      before = element.value.slice(0, caret);
+    } else {
+      const range = this.getCurrentOrStoredRange(element);
+      if (!range || !range.collapsed) return null;
+
+      const prefix = range.cloneRange();
+      prefix.selectNodeContents(element);
+      prefix.setEnd(range.endContainer, range.endOffset);
+      before = prefix.toString();
+    }
+
+    const match = before.match(/(?:^|\s)(\/[^\s]+)$/);
+    if (!match) return null;
+
+    const shortcut = this.normalizeShortcut(match[1]);
+    const entry = this.getShortcutMapForCurrentView().get(shortcut);
+
+    if (!entry || entry.triggerKey !== triggerKey) return null;
+    return { shortcut, snippet: entry };
+  };
+
+  TextExpressApp.prototype.selectCardForPreview = function (snippetId) {
+    const snippet = this.snippets.find((item) => item.id === snippetId);
+    if (!snippet) return false;
+
+    this.selectedId = snippet.id;
+    this.lastShortcutType = snippet.tipo;
+
+    this.listElement
+      ?.querySelectorAll(".te-snippet-card.te-selected")
+      .forEach((card) => {
+        card.classList.remove("te-selected");
+        card.setAttribute("aria-selected", "false");
+      });
+
+    const selectedCard = [...(
+      this.listElement?.querySelectorAll("[data-te-card-id]") || []
+    )].find((card) => card.dataset.teCardId === snippet.id);
+
+    selectedCard?.classList.add("te-selected");
+    selectedCard?.setAttribute("aria-selected", "true");
+
+    this.renderDetail(snippet);
+
+    if (this.uiState) {
+      this.uiState.selectedIdByView[this.getUiViewKey()] = snippet.id;
+      this.scheduleUiStateSave();
+    }
+
+    return true;
+  };
+
+  TextExpressApp.prototype.renderCard = function (snippet) {
+    let html = teV21Original.renderCard.call(this, snippet);
+
+    html = html.replace(
+      /data-te-card-id=/,
+      `tabindex="0" role="button" aria-selected="${snippet.id === this.selectedId ? "true" : "false"}" data-te-card-id=`
+    );
+
+    return html;
+  };
+
+  TextExpressApp.prototype.handleRootClick = function (event) {
+    const card = event.target.closest(
+      ".te-snippet-card[data-te-card-id]"
+    );
+    const interactiveControl = event.target.closest(
+      "[data-te-action], [data-te-direct-move-handle], button, input, select, textarea, a"
+    );
+
+    if (card && !interactiveControl) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.selectCardForPreview(card.dataset.teCardId);
+      return;
+    }
+
+    return teV21Original.handleRootClick.call(this, event);
+  };
+
+  TextExpressApp.prototype.switchToSavedUiType = function (nextType) {
+    const result = teV21Original.switchToSavedUiType.call(this, nextType);
+
+    if (nextType === "atendimento" || nextType === "protocolo") {
+      this.lastShortcutType = nextType;
+    }
+
+    this.shortcutMap = this.getShortcutMapForCurrentView();
+    return result;
+  };
+
+  TextExpressApp.prototype.setupCardPreviewInteraction = function () {
+    if (!this.listElement || this.listElement.dataset.teV21PreviewReady === "true") {
+      return;
+    }
+
+    this.listElement.dataset.teV21PreviewReady = "true";
+
+    this.listElement.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      if (event.target.closest("[data-te-action], button, input, select, textarea, a")) return;
+
+      const card = event.target.closest(
+        ".te-snippet-card[data-te-card-id]"
+      );
+      if (!card) return;
+
+      event.preventDefault();
+      this.selectCardForPreview(card.dataset.teCardId);
+    });
+  };
+
+  TextExpressApp.prototype.mergeImportedBackup = function (
+    parsed,
+    source,
+    rawCategories
+  ) {
+    let categoriesCreated = 0;
+    let categoriesUpdated = 0;
+
+    for (const rawCategory of rawCategories) {
+      const candidate = this.normalizeCategory(rawCategory);
+      const existingIndex = this.categories.findIndex(
+        (category) =>
+          category.id === candidate.id ||
+          (
+            category.tipo === candidate.tipo &&
+            this.normalizeSearchText(category.nome) ===
+              this.normalizeSearchText(candidate.nome)
+          )
+      );
+
+      if (existingIndex >= 0) {
+        const existing = this.categories[existingIndex];
+        this.categories[existingIndex] = {
+          ...existing,
+          ...candidate,
+          id: existing.id
+        };
+        categoriesUpdated += 1;
+      } else {
+        this.categories.push(candidate);
+        categoriesCreated += 1;
+      }
+    }
+
+    this.sortCategories();
+    this.saveCategories();
+
+    const existingById = new Map(
+      this.snippets.map((item, index) => [item.id, index])
+    );
+    const usedByType = {
+      atendimento: this.getUsedShortcutsForType("atendimento"),
+      protocolo: this.getUsedShortcutsForType("protocolo")
+    };
+    const existingSignatures = new Set(
+      this.snippets.map((item) => this.snippetSignature(item))
+    );
+
+    let updated = 0;
+    let added = 0;
+    let skipped = 0;
+    let renamed = 0;
+
+    for (const raw of source) {
+      const item = this.normalizeSnippet(raw);
+
+      if (!item.nome || !item.conteudo) {
+        skipped += 1;
+        continue;
+      }
+
+      const existingIndex = existingById.get(item.id);
+      const used = usedByType[item.tipo];
+
+      if (Number.isInteger(existingIndex)) {
+        const previous = this.snippets[existingIndex];
+        const previousUsed = usedByType[previous.tipo];
+        this.getSnippetShortcutValues(previous).forEach((shortcut) => {
+          previousUsed.delete(shortcut);
+        });
+
+        renamed += this.ensureUniqueSnippetShortcuts(item, used);
+        this.snippets[existingIndex] = item;
+        existingSignatures.add(this.snippetSignature(item));
+        updated += 1;
+        continue;
+      }
+
+      const signature = this.snippetSignature(item);
+      if (existingSignatures.has(signature)) {
+        skipped += 1;
+        continue;
+      }
+
+      renamed += this.ensureUniqueSnippetShortcuts(item, used);
+      this.snippets.push(item);
+      existingById.set(item.id, this.snippets.length - 1);
+      existingSignatures.add(signature);
+      added += 1;
+    }
+
+    const saved = this.saveSnippets();
+    if (saved === false) {
+      throw new Error("O navegador não confirmou a gravação da mesclagem.");
+    }
+
+    this.activeCategory = "Todos";
+    this.selectedId = null;
+    this.searchInput.value = "";
+    this.render();
+
+    return {
+      updated,
+      added,
+      skipped,
+      renamed,
+      categoriesCreated,
+      categoriesUpdated
+    };
+  };
+
+  TextExpressApp.prototype.init = function () {
+    this.lastShortcutType = "atendimento";
+
+    const result = teV21Original.init.call(this);
+
+    if (this.activeType === "protocolo" || this.activeType === "atendimento") {
+      this.lastShortcutType = this.activeType;
+    } else {
+      const selected = this.snippets.find((snippet) => snippet.id === this.selectedId);
+      if (selected) this.lastShortcutType = selected.tipo;
+    }
+
+    this.rebuildShortcutMap();
+    this.shortcutMap = this.getShortcutMapForCurrentView();
+    this.setupCardPreviewInteraction();
+
+    return result;
+  };
 
   function bootTextExpress() {
     const root = document.getElementById("text-express-app");
