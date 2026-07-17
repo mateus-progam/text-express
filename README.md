@@ -1,82 +1,46 @@
-# Text Express 22.0
+# Text Express 23.0 — Base sanitizada
 
-Ferramenta flutuante para localizar, visualizar, inserir e organizar textos de Atendimento e Protocolo.
+Esta versão continua a partir do Text Express 22.0 e preserva o sistema de sequências numeradas.
 
-## Novidade principal: sequências numeradas
+## Base incluída
 
-As sequências continuam exclusivas da área **Atendimento** e agora possuem um menu persistente.
+- 21 categorias;
+- 132 cartões/modelos;
+- 29 sequências de Atendimento;
+- 97 falas internas nas sequências;
+- categorias e cartões mantidos na mesma organização do backup enviado.
 
-O menu pode ser aberto de duas formas:
+## Dados removidos
 
-- digitando o atalho principal da sequência, como `/semgerencia`, e pressionando o gatilho configurado;
-- clicando no botão **ABRIR SEQUÊNCIA** existente no card ou no painel de detalhes.
+Não foram incorporados ao projeto:
 
-Quando o menu estiver aberto:
+- nome lembrado do atendente;
+- preferências pessoais;
+- tema claro/escuro anteriormente escolhido;
+- posição da janela e do botão;
+- filtros, pesquisas, rolagem e seleção anterior;
+- datas e revisões particulares do backup.
 
-- digitar `1`, `2`, `3` etc. em um campo de chat vazio insere a pergunta correspondente;
-- o número serve somente para escolher a pergunta e não é inserido no chat;
-- clicar em uma pergunta também insere o texto no último campo de atendimento utilizado;
-- palavras-chave, como `/led`, `/mexeu` ou `/foto`, podem ser cadastradas em cada pergunta;
-- o menu permanece aberto após cada inserção;
-- é possível alternar entre diferentes atendimentos sem fechar a sequência;
-- `ESC` ou o botão `X` fecham o menu;
-- o cabeçalho mostra qual sequência está aberta e quantas perguntas ela possui;
-- a busca localiza perguntas por número, nome, conteúdo ou palavra-chave.
+Os campos `origem` foram generalizados para não expor nomes pessoais.
 
-## Cadastro de palavras-chave
+## Migração automática
 
-Ao criar ou editar uma sequência, cada pergunta possui o campo **Palavras-chave desta pergunta**.
+No primeiro carregamento da versão 23.0, a base local antiga é substituída pela base limpa incluída no projeto. A migração ocorre uma única vez. Depois, novos cartões, edições e preferências voltam a ser salvos normalmente no navegador.
 
-Exemplo:
+## Sequências
 
-```text
-/led, /mexeu, /foto
-```
+Na área Atendimento, o comando principal de um cartão do tipo sequência abre o menu com suas falas internas. Exemplo:
 
-As palavras-chave adicionais funcionam enquanto a respectiva sequência estiver aberta. O atalho principal de cada pergunta continua funcionando normalmente.
+1. digite o comando principal, como `/oi`;
+2. o comando é removido do chat;
+3. o menu da sequência aparece;
+4. digite o número da fala, use o atalho interno ou clique no item;
+5. somente o texto é inserido, sem o número;
+6. o menu continua aberto até `ESC` ou `X`.
 
-## Compatibilidade ampliada com chats
+## Publicação no GitHub
 
-A versão 22.0 melhora a inserção de textos em:
-
-- `input` e `textarea` comuns;
-- campos `contenteditable`;
-- editores controlados por frameworks;
-- componentes com Shadow DOM aberto;
-- iframes de mesma origem;
-- campos com `role="textbox"`.
-
-Iframes de outra origem continuam protegidos pelas regras de segurança do navegador. Nesses casos, quando a inserção direta não for permitida, o Text Express copia o texto para a área de transferência.
-
-## Recursos preservados
-
-A versão 22.0 mantém:
-
-- todos os modelos das versões anteriores;
-- dados existentes no `localStorage`;
-- categorias;
-- sequências de Atendimento;
-- Protocolos;
-- favoritos;
-- importação completa e mesclagem;
-- nome do atendente memorizado;
-- salvamento automático;
-- posições e estado visual;
-- separação de atalhos entre Atendimento e Protocolo;
-- visualização completa ao clicar nos cards;
-- bookmarklet compacto.
-
-## Favorito compacto
-
-Salve o código abaixo como endereço de um favorito do navegador:
-
-```javascript
-javascript:(()=>{const s=document.createElement('script');s.src='https://king-programador.github.io/text-express/bookmarklet.js?v='+Date.now();(document.head||document.documentElement).appendChild(s)})()
-```
-
-## Arquivos para o GitHub
-
-Envie somente estes cinco arquivos:
+Envie estes cinco arquivos para a raiz do repositório:
 
 - `index.html`
 - `styles.css`
@@ -84,9 +48,4 @@ Envie somente estes cinco arquivos:
 - `bookmarklet.js`
 - `README.md`
 
-Depois da publicação, pressione `Ctrl + F5` no sistema de trabalho.
-
-## Endereços do projeto
-
-- Repositório: `https://github.com/King-Programador/text-express`
-- GitHub Pages: `https://king-programador.github.io/text-express/`
+GitHub Pages: `https://king-programador.github.io/text-express/`
