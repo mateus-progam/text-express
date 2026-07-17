@@ -3915,7 +3915,7 @@
 }
 
 /* ==========================================================
-   Text Express 24.0 — janelas móveis e redimensionáveis
+   Text Express 25.0 — arraste corrigido e redimensionamento
    ========================================================== */
 #text-express-app .te-resizable-window {
   min-width: 0;
@@ -3932,11 +3932,18 @@
 
 #text-express-app .te-right-drag-handle {
   cursor: move;
+  cursor: grab;
 }
 
 #text-express-app .te-sequence-menu-header.te-right-drag-handle {
+  position: relative;
   user-select: none;
   touch-action: none;
+}
+
+#text-express-app .te-sequence-menu.te-window-moving .te-sequence-menu-header,
+#text-express-app .te-panel.te-window-moving [data-te-drag-handle] {
+  cursor: grabbing;
 }
 
 #text-express-app .te-resize-handle {

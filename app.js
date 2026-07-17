@@ -1,12 +1,12 @@
 /*
- * Text Express 24.0.0
+ * Text Express 25.0.0
  * Expansor de textos para atendimento e registro de protocolos.
  * Sem dependências externas.
  */
 (() => {
   "use strict";
 
-  const APP_VERSION = "24.0.0";
+  const APP_VERSION = "25.0.0";
   const STORAGE_KEYS = Object.freeze({
     snippets: "text_express_snippets",
     darkMode: "te_dark_mode",
@@ -7728,7 +7728,7 @@
 
 
   /* ==========================================================
-   * Text Express 24.0 — janelas móveis e redimensionáveis
+   * Text Express 25.0 — correção do arraste das janelas
    * - menu de sequência: botão direito no cabeçalho para mover;
    * - painel principal: mantém o arraste atual e aceita botão direito;
    * - ambos podem ser redimensionados pelas bordas e cantos;
@@ -7869,12 +7869,19 @@
   };
 
   TextExpressApp.prototype.startManagedDrag = function (target, scope, event) {
-    if (!target || event.button !== 2) return;
+    if (!target || !event) return;
+
+    const isSequence = scope === "sequence";
+    const allowedButton = event.button === 2 || (isSequence && event.button === 0);
+    if (!allowedButton) return;
     if (event.target.closest?.("button, input, textarea, select, a, [data-te-resize-edge]")) return;
     if (scope === "panel" && (target.classList.contains("te-fullscreen") || target.classList.contains("te-hidden"))) return;
 
     const rect = target.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
+
+    event.preventDefault();
+    event.stopPropagation();
 
     target.style.left = `${rect.left}px`;
     target.style.top = `${rect.top}px`;
@@ -7889,12 +7896,17 @@
       target,
       scope,
       pointerId: event.pointerId,
+      button: event.button,
       offsetX: event.clientX - rect.left,
       offsetY: event.clientY - rect.top
     };
 
     target.classList.add("te-window-moving");
-    event.currentTarget?.setPointerCapture?.(event.pointerId);
+
+    const blockContextMenu = (contextEvent) => {
+      contextEvent.preventDefault();
+      contextEvent.stopPropagation();
+    };
 
     const move = (moveEvent) => {
       const state = this.managedDragState;
@@ -7908,24 +7920,27 @@
       state.target.style.left = `${Math.round(left)}px`;
       state.target.style.top = `${Math.round(top)}px`;
       moveEvent.preventDefault();
+      moveEvent.stopPropagation();
     };
 
-    const end = (endEvent) => {
-      if (!this.managedDragState || endEvent.pointerId !== this.managedDragState.pointerId) return;
-      document.removeEventListener("pointermove", move, true);
-      document.removeEventListener("pointerup", end, true);
-      document.removeEventListener("pointercancel", end, true);
+    const finish = (endEvent) => {
       const state = this.managedDragState;
+      if (!state || endEvent.pointerId !== state.pointerId) return;
+      document.removeEventListener("pointermove", move, true);
+      document.removeEventListener("pointerup", finish, true);
+      document.removeEventListener("pointercancel", finish, true);
+      document.removeEventListener("contextmenu", blockContextMenu, true);
       this.managedDragState = null;
       state.target.classList.remove("te-window-moving");
       this.saveManagedGeometry(state.target, state.scope);
+      endEvent.preventDefault();
+      endEvent.stopPropagation();
     };
 
     document.addEventListener("pointermove", move, true);
-    document.addEventListener("pointerup", end, true);
-    document.addEventListener("pointercancel", end, true);
-    event.preventDefault();
-    event.stopPropagation();
+    document.addEventListener("pointerup", finish, true);
+    document.addEventListener("pointercancel", finish, true);
+    document.addEventListener("contextmenu", blockContextMenu, true);
   };
 
   TextExpressApp.prototype.saveManagedGeometry = function (target, scope) {
@@ -8006,14 +8021,17 @@
       if (dragHandle) {
         dragHandle.classList.add("te-right-drag-handle");
         dragHandle.title = scope === "sequence"
-          ? "Clique com o botão direito e arraste para mover a sequência"
+          ? "Arraste este cabeçalho com o botão esquerdo ou direito para mover a sequência"
           : "Arraste para mover. Também funciona com o botão direito";
         dragHandle.addEventListener("contextmenu", (event) => {
           if (event.target.closest?.("button, input, textarea, select, a")) return;
           event.preventDefault();
-        });
+          event.stopPropagation();
+        }, true);
+        dragHandle.addEventListener("dragstart", (event) => event.preventDefault(), true);
         dragHandle.addEventListener("pointerdown", (event) => {
-          if (event.button === 2) this.startManagedDrag(target, scope, event);
+          const canStart = event.button === 2 || (scope === "sequence" && event.button === 0);
+          if (canStart) this.startManagedDrag(target, scope, event);
         }, true);
       }
     }
