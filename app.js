@@ -1,12 +1,12 @@
 /*
- * Text Express 21.0.0
+ * Text Express 22.0.0
  * Expansor de textos para atendimento e registro de protocolos.
  * Sem dependências externas.
  */
 (() => {
   "use strict";
 
-  const APP_VERSION = "21.0.0";
+  const APP_VERSION = "22.0.0";
   const STORAGE_KEYS = Object.freeze({
     snippets: "text_express_snippets",
     darkMode: "te_dark_mode",
@@ -6850,6 +6850,819 @@
     this.shortcutMap = this.getShortcutMapForCurrentView();
     this.setupCardPreviewInteraction();
 
+    return result;
+  };
+
+  /* ==========================================================
+   * Text Express 22.0 — menu persistente de sequências
+   * - abre pelo comando principal ou pelo botão ABRIR SEQUÊNCIA;
+   * - seleciona falas por número, palavra-chave ou clique;
+   * - insere somente o texto da fala, sem o número;
+   * - permanece aberto ao alternar entre atendimentos;
+   * - amplia a compatibilidade com editores modernos, Shadow DOM
+   *   e iframes de mesma origem.
+   * ========================================================== */
+  const teV22Original = Object.freeze({
+    init: TextExpressApp.prototype.init,
+    normalizeFlowStep: TextExpressApp.prototype.normalizeFlowStep,
+    normalizeSnippet: TextExpressApp.prototype.normalizeSnippet,
+    renderCard: TextExpressApp.prototype.renderCard,
+    renderFlowDetail: TextExpressApp.prototype.renderFlowDetail,
+    renderFlowEditorSteps: TextExpressApp.prototype.renderFlowEditorSteps,
+    syncEditingFlowSteps: TextExpressApp.prototype.syncEditingFlowSteps,
+    handleRootClick: TextExpressApp.prototype.handleRootClick,
+    handleRootInput: TextExpressApp.prototype.handleRootInput,
+    onGlobalFocusIn: TextExpressApp.prototype.onGlobalFocusIn,
+    onSelectionChange: TextExpressApp.prototype.onSelectionChange,
+    onGlobalKeyDown: TextExpressApp.prototype.onGlobalKeyDown,
+    findShortcutBeforeCaret: TextExpressApp.prototype.findShortcutBeforeCaret,
+    expandShortcut: TextExpressApp.prototype.expandShortcut,
+    insertFlowStep: TextExpressApp.prototype.insertFlowStep,
+    getEditableRoot: TextExpressApp.prototype.getEditableRoot,
+    captureContentEditableRange: TextExpressApp.prototype.captureContentEditableRange,
+    getCurrentOrStoredRange: TextExpressApp.prototype.getCurrentOrStoredRange,
+    captureInsertionContext: TextExpressApp.prototype.captureInsertionContext,
+    insertIntoInput: TextExpressApp.prototype.insertIntoInput,
+    insertIntoContentEditable: TextExpressApp.prototype.insertIntoContentEditable,
+    dispatchInputEvents: TextExpressApp.prototype.dispatchInputEvents
+  });
+
+  TextExpressApp.prototype.parseSequenceKeywords = function (raw) {
+    const source = Array.isArray(raw)
+      ? raw
+      : String(raw || "").split(/[;,\n]+/);
+    const result = [];
+    const used = new Set();
+
+    for (const value of source) {
+      const text = String(value || "").trim();
+      if (!text) continue;
+      const keyword = this.normalizeShortcut(text);
+      if (!keyword || keyword === "/" || used.has(keyword)) continue;
+      used.add(keyword);
+      result.push(keyword);
+    }
+
+    return result;
+  };
+
+  TextExpressApp.prototype.normalizeFlowStep = function (raw = {}, index = 0, parentShortcut = "/fluxo") {
+    const step = teV22Original.normalizeFlowStep.call(this, raw, index, parentShortcut);
+    const aliases = raw.palavrasChave ?? raw.palavras_chave ?? raw.keywords ?? raw.aliases ?? [];
+    step.palavrasChave = this.parseSequenceKeywords(aliases)
+      .filter((keyword) => keyword !== step.atalho);
+    return step;
+  };
+
+  TextExpressApp.prototype.normalizeSnippet = function (raw = {}) {
+    const snippet = teV22Original.normalizeSnippet.call(this, raw);
+    if (snippet.tipo !== "atendimento" || snippet.modelo !== "fluxo") return snippet;
+
+    const reserved = new Set([this.normalizeShortcut(snippet.atalho)]);
+    for (const step of snippet.etapas || []) reserved.add(this.normalizeShortcut(step.atalho));
+
+    const aliasesUsed = new Set();
+    snippet.etapas = (snippet.etapas || []).map((step) => {
+      const aliases = this.parseSequenceKeywords(step.palavrasChave || []);
+      step.palavrasChave = aliases.filter((keyword) => {
+        if (reserved.has(keyword) || aliasesUsed.has(keyword)) return false;
+        aliasesUsed.add(keyword);
+        return true;
+      });
+      return step;
+    });
+
+    return snippet;
+  };
+
+  TextExpressApp.prototype.ensureSequenceMenu = function () {
+    if (this.sequenceMenu?.isConnected) return this.sequenceMenu;
+
+    const menu = document.createElement("section");
+    menu.id = "te-sequence-menu";
+    menu.className = "te-sequence-menu te-hidden";
+    menu.setAttribute("role", "dialog");
+    menu.setAttribute("aria-modal", "false");
+    menu.setAttribute("aria-label", "Sequência de atendimento aberta");
+    menu.innerHTML = `
+      <header class="te-sequence-menu-header">
+        <div class="te-sequence-menu-title-wrap">
+          <span class="te-sequence-menu-icon">${this.icon("clipboard-list")}</span>
+          <div>
+            <div class="te-sequence-menu-kicker">
+              <span id="te-sequence-command">SEQUÊNCIA</span>
+              <span class="te-sequence-open-badge">Aberta</span>
+            </div>
+            <strong id="te-sequence-title">Selecione uma sequência</strong>
+          </div>
+        </div>
+        <div class="te-sequence-menu-meta">
+          <span id="te-sequence-count">0 perguntas</span>
+          <button class="te-sequence-close" type="button" data-te-action="sequence-close" title="Fechar sequência (ESC)" aria-label="Fechar sequência">
+            ${this.icon("x")}<small>ESC</small>
+          </button>
+        </div>
+      </header>
+      <label class="te-sequence-search">
+        ${this.icon("search")}
+        <input id="te-sequence-search-input" type="search" autocomplete="off" placeholder="Buscar por número, texto ou palavra-chave..." aria-label="Buscar nesta sequência">
+      </label>
+      <div class="te-sequence-list" id="te-sequence-list"></div>
+      <footer class="te-sequence-menu-footer">
+        <span>${this.icon("zap")} No chat vazio, digite apenas o número. Também funciona por palavra-chave.</span>
+        <span>O menu permanece aberto após inserir.</span>
+      </footer>`;
+
+    this.root.appendChild(menu);
+    this.sequenceMenu = menu;
+    this.sequenceSearchInput = menu.querySelector("#te-sequence-search-input");
+    this.sequenceList = menu.querySelector("#te-sequence-list");
+    return menu;
+  };
+
+  TextExpressApp.prototype.getActiveSequence = function () {
+    if (!this.activeSequenceId) return null;
+    return this.snippets.find((item) =>
+      item.id === this.activeSequenceId &&
+      item.tipo === "atendimento" &&
+      item.modelo === "fluxo" &&
+      item.ativo
+    ) || null;
+  };
+
+  TextExpressApp.prototype.getSequenceStepKeywords = function (step) {
+    return [...new Set([
+      this.normalizeShortcut(step.atalho),
+      ...this.parseSequenceKeywords(step.palavrasChave || [])
+    ].filter(Boolean))];
+  };
+
+  TextExpressApp.prototype.renderSequenceMenu = function () {
+    this.ensureSequenceMenu();
+    const flow = this.getActiveSequence();
+    if (!flow) {
+      this.closeSequenceMenu(false);
+      return;
+    }
+
+    const query = this.normalizeSearchText(this.sequenceSearchInput?.value || "");
+    const state = this.getFlowState(flow);
+    const matches = (flow.etapas || [])
+      .map((step, index) => ({ step, index }))
+      .filter(({ step, index }) => {
+        if (!query) return true;
+        const haystack = this.normalizeSearchText([
+          String(index + 1),
+          step.nome,
+          step.conteudo,
+          step.atalho,
+          ...(step.palavrasChave || [])
+        ].join(" "));
+        return haystack.includes(query.replace(/^\//, "")) || haystack.includes(query);
+      });
+
+    this.sequenceMenu.querySelector("#te-sequence-command").textContent = `SEQUÊNCIA ${flow.atalho}`;
+    this.sequenceMenu.querySelector("#te-sequence-title").textContent = flow.nome;
+    this.sequenceMenu.querySelector("#te-sequence-count").textContent = `${flow.etapas.length} ${flow.etapas.length === 1 ? "pergunta" : "perguntas"}`;
+
+    this.sequenceList.innerHTML = matches.length
+      ? matches.map(({ step, index }) => {
+          const keywords = this.getSequenceStepKeywords(step);
+          const chips = keywords.map((keyword) => `<code>${this.escapeHtml(keyword)}</code>`).join("");
+          return `
+            <button class="te-sequence-item ${state.current === index ? "te-current" : ""} ${state.used.has(index) ? "te-used" : ""}" type="button" data-te-action="sequence-step-insert" data-te-id="${this.escapeAttr(flow.id)}" data-te-step-index="${index}">
+              <span class="te-sequence-number">${index + 1}</span>
+              <span class="te-sequence-item-content">
+                <strong>${this.escapeHtml(step.nome)}</strong>
+                <span>${this.escapeHtml(step.conteudo)}</span>
+                <span class="te-sequence-keywords">${chips || "<em>Sem palavra-chave adicional</em>"}</span>
+              </span>
+              <span class="te-sequence-item-action">${state.used.has(index) ? this.icon("check-circle") : this.icon("send")}</span>
+            </button>`;
+        }).join("")
+      : `<div class="te-sequence-empty">${this.icon("search")}<strong>Nenhuma pergunta encontrada</strong><span>Limpe a busca ou use outra palavra-chave.</span></div>`;
+  };
+
+  TextExpressApp.prototype.openSequenceMenu = function (flowOrId, options = {}) {
+    const flow = typeof flowOrId === "string"
+      ? this.snippets.find((item) => item.id === flowOrId)
+      : flowOrId;
+
+    if (!flow || flow.tipo !== "atendimento" || flow.modelo !== "fluxo") {
+      this.showToast("Essa sequência não está disponível no Atendimento.", "error");
+      return false;
+    }
+
+    this.ensureSequenceMenu();
+    this.activeSequenceId = flow.id;
+    if (!options.preserveSearch && this.sequenceSearchInput) this.sequenceSearchInput.value = "";
+    this.renderSequenceMenu();
+    this.sequenceMenu.classList.remove("te-hidden");
+    this.sequenceMenu.setAttribute("aria-hidden", "false");
+    return true;
+  };
+
+  TextExpressApp.prototype.closeSequenceMenu = function (announce = true) {
+    this.ensureSequenceMenu();
+    const wasOpen = !this.sequenceMenu.classList.contains("te-hidden");
+    this.sequenceMenu.classList.add("te-hidden");
+    this.sequenceMenu.setAttribute("aria-hidden", "true");
+    this.activeSequenceId = null;
+    if (this.sequenceSearchInput) this.sequenceSearchInput.value = "";
+    if (announce && wasOpen) this.showToast("Sequência fechada.");
+  };
+
+  TextExpressApp.prototype.isSequenceMenuOpen = function () {
+    return Boolean(this.sequenceMenu && !this.sequenceMenu.classList.contains("te-hidden") && this.getActiveSequence());
+  };
+
+  TextExpressApp.prototype.renderCard = function (snippet) {
+    let html = teV22Original.renderCard.call(this, snippet);
+    if (snippet?.modelo === "fluxo") {
+      html = html.replace(/Abrir sequência/g, "ABRIR SEQUÊNCIA");
+    }
+    return html;
+  };
+
+  TextExpressApp.prototype.renderFlowDetail = function (flow) {
+    const result = teV22Original.renderFlowDetail.call(this, flow);
+    const actions = this.detailPane?.querySelector(".te-flow-header-actions");
+    if (actions && !actions.querySelector('[data-te-action="sequence-open"]')) {
+      const button = document.createElement("button");
+      button.className = "te-primary-button te-sequence-open-detail";
+      button.type = "button";
+      button.dataset.teAction = "sequence-open";
+      button.dataset.teId = flow.id;
+      button.innerHTML = `${this.icon("play-circle")} ABRIR SEQUÊNCIA`;
+      actions.prepend(button);
+    }
+    return result;
+  };
+
+  TextExpressApp.prototype.renderFlowEditorSteps = function () {
+    const result = teV22Original.renderFlowEditorSteps.call(this);
+    const editors = [...this.root.querySelectorAll(".te-flow-step-editor")];
+
+    editors.forEach((editor, index) => {
+      const grid = editor.querySelector(".te-flow-step-editor-grid");
+      if (!grid || grid.querySelector('[data-te-flow-field="palavrasChave"]')) return;
+      const step = this.editingFlowSteps[index] || {};
+      const label = document.createElement("label");
+      label.className = "te-flow-keywords-field";
+      label.innerHTML = `
+        <span>Palavras-chave desta pergunta</span>
+        <input type="text" data-te-flow-field="palavrasChave" value="${this.escapeAttr((step.palavrasChave || []).join(", "))}" spellcheck="false" placeholder="/led, /mexeu, /foto">
+        <small>Separe por vírgulas. Elas funcionam enquanto esta sequência estiver aberta.</small>`;
+      grid.appendChild(label);
+    });
+
+    return result;
+  };
+
+  TextExpressApp.prototype.syncEditingFlowSteps = function () {
+    const result = teV22Original.syncEditingFlowSteps.call(this);
+    const editors = [...this.root.querySelectorAll(".te-flow-step-editor")];
+    editors.forEach((editor, index) => {
+      if (!this.editingFlowSteps[index]) return;
+      const field = editor.querySelector('[data-te-flow-field="palavrasChave"]');
+      this.editingFlowSteps[index].palavrasChave = this.parseSequenceKeywords(field?.value || "")
+        .filter((keyword) => keyword !== this.editingFlowSteps[index].atalho);
+    });
+    return result;
+  };
+
+  TextExpressApp.prototype.handleRootClick = function (event) {
+    const actionButton = event.target.closest("[data-te-action]");
+    const action = actionButton?.dataset.teAction;
+
+    if (action === "sequence-close") {
+      event.preventDefault();
+      event.stopPropagation();
+      this.closeSequenceMenu();
+      return;
+    }
+
+    if (action === "sequence-step-insert") {
+      event.preventDefault();
+      event.stopPropagation();
+      const stepIndex = Number(actionButton.dataset.teStepIndex);
+      void this.insertSequenceStep(actionButton.dataset.teId, stepIndex);
+      return;
+    }
+
+    if (action === "sequence-open" || action === "flow-open") {
+      const id = actionButton.dataset.teId;
+      const flow = this.snippets.find((item) => item.id === id && item.modelo === "fluxo" && item.tipo === "atendimento");
+      if (flow) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.selectedId = flow.id;
+        this.activeType = "atendimento";
+        this.lastShortcutType = "atendimento";
+        this.render();
+        this.openSequenceMenu(flow);
+        this.showToast(`Sequência “${flow.nome}” aberta.`, "success");
+        return;
+      }
+    }
+
+    return teV22Original.handleRootClick.call(this, event);
+  };
+
+  TextExpressApp.prototype.handleRootInput = function (event) {
+    if (event.target?.id === "te-sequence-search-input") {
+      this.renderSequenceMenu();
+      return;
+    }
+    return teV22Original.handleRootInput.call(this, event);
+  };
+
+  TextExpressApp.prototype.getEventOrigin = function (event) {
+    const path = typeof event?.composedPath === "function" ? event.composedPath() : [];
+    return path.find((node) => node && node.nodeType === 1) || event?.target || null;
+  };
+
+  TextExpressApp.prototype.isTextInputElement = function (element) {
+    const tag = String(element?.tagName || "").toLowerCase();
+    if (tag === "textarea") return !element.disabled && !element.readOnly;
+    if (tag !== "input") return false;
+    const allowed = ["text", "search", "email", "tel", "url", ""];
+    return allowed.includes(String(element.type || "text").toLowerCase()) && !element.disabled && !element.readOnly;
+  };
+
+  TextExpressApp.prototype.getEditableRoot = function (target) {
+    if (!target) return null;
+    const ownerDocument = target.ownerDocument || document;
+    if (target === ownerDocument.body || target === ownerDocument.documentElement) return null;
+    if (this.isTextInputElement(target)) return target;
+
+    let node = target.nodeType === 1 ? target : target.parentElement;
+    while (node) {
+      if (this.isTextInputElement(node)) return node;
+      const contentEditable = node.getAttribute?.("contenteditable");
+      const role = node.getAttribute?.("role");
+      if (
+        contentEditable === "true" ||
+        contentEditable === "plaintext-only" ||
+        node.isContentEditable ||
+        role === "textbox"
+      ) return node;
+
+      const root = node.getRootNode?.();
+      if (root?.host && root !== ownerDocument) node = root.host;
+      else node = node.parentElement;
+    }
+
+    return teV22Original.getEditableRoot.call(this, target);
+  };
+
+  TextExpressApp.prototype.getEditableFromEvent = function (event) {
+    const path = typeof event?.composedPath === "function" ? event.composedPath() : [];
+    for (const node of path) {
+      const editable = this.getEditableRoot(node);
+      if (editable) return editable;
+    }
+    return this.getEditableRoot(event?.target);
+  };
+
+  TextExpressApp.prototype.getSelectionForElement = function (element) {
+    const ownerWindow = element?.ownerDocument?.defaultView || window;
+    return ownerWindow.getSelection?.() || null;
+  };
+
+  TextExpressApp.prototype.captureContentEditableRange = function (element) {
+    if (!element || this.isTextInputElement(element)) return;
+    const selection = this.getSelectionForElement(element);
+    if (!selection || !selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    if (element.contains(range.commonAncestorContainer)) {
+      this.contentEditableRanges.set(element, range.cloneRange());
+    }
+  };
+
+  TextExpressApp.prototype.getCurrentOrStoredRange = function (element) {
+    const selection = this.getSelectionForElement(element);
+    if (selection && selection.rangeCount) {
+      const current = selection.getRangeAt(0);
+      if (element.contains(current.commonAncestorContainer)) return current;
+    }
+    const stored = this.contentEditableRanges.get(element);
+    return stored ? stored.cloneRange() : null;
+  };
+
+  TextExpressApp.prototype.captureInsertionContext = function (element, shortcutLength = 0) {
+    if (!element || !element.isConnected || !this.getEditableRoot(element)) return null;
+    if (this.isTextInputElement(element)) {
+      const start = typeof element.selectionStart === "number" ? element.selectionStart : String(element.value || "").length;
+      const end = typeof element.selectionEnd === "number" ? element.selectionEnd : start;
+      return {
+        kind: "input",
+        element,
+        start: shortcutLength ? Math.max(0, start - shortcutLength) : start,
+        end
+      };
+    }
+
+    const range = this.getCurrentOrStoredRange(element);
+    if (!range) return null;
+    return {
+      kind: "contenteditable",
+      element,
+      range: range.cloneRange(),
+      shortcutLength
+    };
+  };
+
+  TextExpressApp.prototype.dispatchBeforeInputEvent = function (element, content, inputType = "insertText") {
+    const ownerWindow = element?.ownerDocument?.defaultView || window;
+    try {
+      return element.dispatchEvent(new ownerWindow.InputEvent("beforeinput", {
+        bubbles: true,
+        composed: true,
+        cancelable: true,
+        inputType,
+        data: content
+      }));
+    } catch (error) {
+      return element.dispatchEvent(new ownerWindow.Event("beforeinput", {
+        bubbles: true,
+        composed: true,
+        cancelable: true
+      }));
+    }
+  };
+
+  TextExpressApp.prototype.dispatchInputEvents = function (element, content, inputType = "insertText") {
+    const ownerWindow = element?.ownerDocument?.defaultView || window;
+    try {
+      element.dispatchEvent(new ownerWindow.InputEvent("input", {
+        bubbles: true,
+        composed: true,
+        inputType,
+        data: content
+      }));
+    } catch (error) {
+      element.dispatchEvent(new ownerWindow.Event("input", { bubbles: true, composed: true }));
+    }
+    element.dispatchEvent(new ownerWindow.Event("change", { bubbles: true, composed: true }));
+  };
+
+  TextExpressApp.prototype.insertIntoInput = function (element, content, start, end) {
+    try {
+      const ownerWindow = element.ownerDocument?.defaultView || window;
+      const value = String(element.value || "");
+      const next = value.slice(0, start) + content + value.slice(end);
+      const tag = String(element.tagName || "").toLowerCase();
+      const prototype = tag === "textarea"
+        ? ownerWindow.HTMLTextAreaElement?.prototype
+        : ownerWindow.HTMLInputElement?.prototype;
+      const descriptor = prototype && Object.getOwnPropertyDescriptor(prototype, "value");
+
+      element.focus({ preventScroll: true });
+      this.dispatchBeforeInputEvent(element, content, end > start ? "insertReplacementText" : "insertText");
+      if (descriptor?.set) descriptor.set.call(element, next);
+      else element.value = next;
+
+      const caret = start + content.length;
+      if (typeof element.setSelectionRange === "function") element.setSelectionRange(caret, caret);
+      this.dispatchInputEvents(element, content, end > start ? "insertReplacementText" : "insertText");
+      this.lastActiveElement = element;
+      return String(element.value || "") === next;
+    } catch (error) {
+      return false;
+    }
+  };
+
+  TextExpressApp.prototype.extendSelectionBackward = function (selection, range, amount, ownerWindow) {
+    if (!amount) return;
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    if (typeof selection.modify === "function") {
+      for (let index = 0; index < amount; index += 1) {
+        selection.modify("extend", "backward", "character");
+      }
+      return;
+    }
+
+    const NodeCtor = ownerWindow.Node;
+    if (range.endContainer.nodeType === NodeCtor.TEXT_NODE && range.endOffset >= amount) {
+      range.setStart(range.endContainer, range.endOffset - amount);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+  };
+
+  TextExpressApp.prototype.insertIntoContentEditable = function (element, content, savedRange, shortcutLength = 0) {
+    try {
+      const ownerDocument = element.ownerDocument || document;
+      const ownerWindow = ownerDocument.defaultView || window;
+      const selection = ownerWindow.getSelection();
+      if (!selection) return false;
+
+      element.focus({ preventScroll: true });
+      selection.removeAllRanges();
+      const range = savedRange.cloneRange();
+      selection.addRange(range);
+      this.extendSelectionBackward(selection, range, shortcutLength, ownerWindow);
+
+      const selectedRange = selection.rangeCount ? selection.getRangeAt(0) : range;
+      this.dispatchBeforeInputEvent(
+        element,
+        content,
+        selectedRange.collapsed ? "insertText" : "insertReplacementText"
+      );
+
+      let inserted = false;
+      try {
+        inserted = Boolean(ownerDocument.execCommand?.("insertText", false, content));
+      } catch (error) {
+        inserted = false;
+      }
+
+      if (!inserted) {
+        const activeRange = selection.rangeCount ? selection.getRangeAt(0) : selectedRange;
+        activeRange.deleteContents();
+        const textNode = ownerDocument.createTextNode(content);
+        activeRange.insertNode(textNode);
+        activeRange.setStartAfter(textNode);
+        activeRange.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(activeRange);
+      }
+
+      if (selection.rangeCount) {
+        this.contentEditableRanges.set(element, selection.getRangeAt(0).cloneRange());
+      }
+      this.dispatchInputEvents(element, content, shortcutLength ? "insertReplacementText" : "insertText");
+      this.lastActiveElement = element;
+      return true;
+    } catch (error) {
+      return false;
+    }
+  };
+
+  TextExpressApp.prototype.onGlobalFocusIn = function (event) {
+    const editable = this.getEditableFromEvent(event);
+    if (!editable || this.root.contains(editable)) return;
+    this.lastActiveElement = editable;
+    this.captureContentEditableRange(editable);
+  };
+
+  TextExpressApp.prototype.onSelectionChange = function (event) {
+    const sourceDocument = event?.currentTarget?.nodeType === 9 ? event.currentTarget : document;
+    let active = sourceDocument.activeElement;
+    while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
+    const editable = this.getEditableRoot(active);
+    if (editable && !this.root.contains(editable)) {
+      this.lastActiveElement = editable;
+      this.captureContentEditableRange(editable);
+    }
+  };
+
+  TextExpressApp.prototype.getTextBeforeCaret = function (element) {
+    if (this.isTextInputElement(element)) {
+      const caret = typeof element.selectionStart === "number" ? element.selectionStart : String(element.value || "").length;
+      return String(element.value || "").slice(0, caret);
+    }
+    const range = this.getCurrentOrStoredRange(element);
+    if (!range || !range.collapsed) return "";
+    const prefix = range.cloneRange();
+    prefix.selectNodeContents(element);
+    prefix.setEnd(range.endContainer, range.endOffset);
+    return prefix.toString();
+  };
+
+  TextExpressApp.prototype.findShortcutBeforeCaret = function (element, triggerKey) {
+    const before = this.getTextBeforeCaret(element);
+    const match = before.match(/(?:^|\s)(\/[^\s]+)$/);
+    if (!match) return null;
+    const shortcut = this.normalizeShortcut(match[1]);
+    const entry = this.getShortcutMapForCurrentView().get(shortcut);
+    if (!entry || entry.triggerKey !== triggerKey) return null;
+    return { shortcut, snippet: entry };
+  };
+
+  TextExpressApp.prototype.findActiveSequenceKeywordBeforeCaret = function (element, triggerKey) {
+    const flow = this.getActiveSequence();
+    if (!flow || !this.isSequenceMenuOpen()) return null;
+    const before = this.getTextBeforeCaret(element);
+    const match = before.match(/(?:^|\s)(\/[^\s]+)$/);
+    if (!match) return null;
+    const shortcut = this.normalizeShortcut(match[1]);
+
+    for (let index = 0; index < flow.etapas.length; index += 1) {
+      const step = flow.etapas[index];
+      if (step.triggerKey !== triggerKey) continue;
+      if (this.getSequenceStepKeywords(step).includes(shortcut)) {
+        return { shortcut, flow, step, stepIndex: index };
+      }
+    }
+    return null;
+  };
+
+  TextExpressApp.prototype.isEditableBlankForNumberSelection = function (element) {
+    if (!element) return false;
+    if (this.isTextInputElement(element)) {
+      const value = String(element.value || "");
+      const start = typeof element.selectionStart === "number" ? element.selectionStart : value.length;
+      const end = typeof element.selectionEnd === "number" ? element.selectionEnd : start;
+      if (start !== end && start === 0 && end === value.length) return true;
+      return value.replace(/[\s\u200B-\u200D\uFEFF]/g, "") === "";
+    }
+    return String(element.innerText ?? element.textContent ?? "")
+      .replace(/[\s\u200B-\u200D\uFEFF]/g, "") === "";
+  };
+
+  TextExpressApp.prototype.insertSequenceStep = async function (flowId, stepIndex, suppliedContext = null) {
+    const flow = this.snippets.find((item) =>
+      item.id === flowId && item.tipo === "atendimento" && item.modelo === "fluxo"
+    );
+    const step = flow?.etapas?.[stepIndex];
+    if (!flow || !step) return false;
+
+    const context = suppliedContext || this.captureInsertionContext(this.lastActiveElement, 0);
+    const content = await this.processFlowStep(flow, step);
+    if (content === null) {
+      this.showToast("Inserção cancelada.");
+      return false;
+    }
+
+    let inserted = false;
+    if (context) inserted = this.applyInsertionContext(context, content);
+    if (!inserted) {
+      await this.copyText(content);
+      this.showToast(`Pergunta ${stepIndex + 1} copiada porque o chat bloqueou a inserção.`, "error", 5000);
+    } else {
+      this.showToast(`Pergunta ${stepIndex + 1} inserida.`, "success");
+    }
+
+    const state = this.getFlowState(flow);
+    state.current = stepIndex;
+    state.used.add(stepIndex);
+    if (this.selectedId === flow.id) this.renderDetail(flow);
+    if (this.activeSequenceId === flow.id) this.renderSequenceMenu();
+    return inserted;
+  };
+
+  TextExpressApp.prototype.insertFlowStep = async function (flowId, stepIndex, advance = false) {
+    const inserted = await this.insertSequenceStep(flowId, stepIndex);
+    const flow = this.snippets.find((item) => item.id === flowId && item.modelo === "fluxo");
+    if (inserted && advance && flow) {
+      const state = this.getFlowState(flow);
+      state.current = Math.min(stepIndex + 1, flow.etapas.length - 1);
+      if (this.selectedId === flow.id) this.renderDetail(flow);
+      if (this.activeSequenceId === flow.id) this.renderSequenceMenu();
+    }
+    return inserted;
+  };
+
+  TextExpressApp.prototype.expandShortcut = async function (entry, context) {
+    if (entry?.kind === "flow") {
+      if (!context) return;
+      this.lastActiveElement = context.element;
+      this.applyInsertionContext(context, "");
+      this.activeType = "atendimento";
+      this.lastShortcutType = "atendimento";
+      this.activeCategory = "Todos";
+      this.selectedId = entry.snippet.id;
+      this.openSequenceMenu(entry.snippet);
+      this.showToast(`Sequência “${entry.snippet.nome}” aberta.`, "success");
+      return;
+    }
+
+    if (entry?.kind === "flow-step") {
+      const result = await teV22Original.expandShortcut.call(this, entry, context);
+      if (this.activeSequenceId === entry.snippet.id) this.renderSequenceMenu();
+      return result;
+    }
+
+    return teV22Original.expandShortcut.call(this, entry, context);
+  };
+
+  TextExpressApp.prototype.onGlobalKeyDown = function (event) {
+    if (
+      event.key === "Escape" &&
+      this.isSequenceMenuOpen() &&
+      this.variableModal.classList.contains("te-hidden") &&
+      this.snippetModal.classList.contains("te-hidden") &&
+      this.settingsModal.classList.contains("te-hidden") &&
+      this.categoryModal.classList.contains("te-hidden")
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.closeSequenceMenu();
+      return;
+    }
+
+    if (
+      this.isSequenceMenuOpen() &&
+      !event.defaultPrevented &&
+      !event.isComposing &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.metaKey
+    ) {
+      const editable = this.getEditableFromEvent(event);
+      if (editable && !this.root.contains(editable)) {
+        this.lastActiveElement = editable;
+        this.captureContentEditableRange(editable);
+        const flow = this.getActiveSequence();
+
+        if (/^[1-9]$/.test(event.key) && this.isEditableBlankForNumberSelection(editable)) {
+          const stepIndex = Number(event.key) - 1;
+          if (flow?.etapas?.[stepIndex]) {
+            event.preventDefault();
+            event.stopPropagation();
+            const context = this.captureInsertionContext(editable, 0);
+            void this.insertSequenceStep(flow.id, stepIndex, context);
+            return;
+          }
+        }
+
+        const triggerKey = this.getTriggerKey(event);
+        if (triggerKey) {
+          const aliasMatch = this.findActiveSequenceKeywordBeforeCaret(editable, triggerKey);
+          if (aliasMatch) {
+            event.preventDefault();
+            event.stopPropagation();
+            const context = this.captureInsertionContext(editable, aliasMatch.shortcut.length);
+            void this.insertSequenceStep(aliasMatch.flow.id, aliasMatch.stepIndex, context);
+            return;
+          }
+        }
+      }
+    }
+
+    return teV22Original.onGlobalKeyDown.call(this, event);
+  };
+
+  TextExpressApp.prototype.installDocumentBridge = function (doc) {
+    if (!doc || this.bridgedDocuments.has(doc)) return;
+    this.bridgedDocuments.add(doc);
+
+    if (doc !== document) {
+      doc.addEventListener("keydown", this.onGlobalKeyDown, true);
+      doc.addEventListener("focusin", this.onGlobalFocusIn, true);
+      doc.addEventListener("selectionchange", this.onSelectionChange, true);
+    }
+
+    const scan = (rootNode) => {
+      if (!rootNode?.querySelectorAll && !rootNode?.matches) return;
+      const frames = [];
+      if (rootNode.matches?.("iframe")) frames.push(rootNode);
+      if (rootNode.querySelectorAll) frames.push(...rootNode.querySelectorAll("iframe"));
+      for (const iframe of frames) {
+        const connect = () => {
+          try {
+            const frameDocument = iframe.contentDocument;
+            if (frameDocument) {
+              this.installDocumentBridge(frameDocument);
+              scan(frameDocument);
+            }
+          } catch (error) {
+            // Iframes de outra origem são protegidos pelo navegador.
+          }
+        };
+        iframe.addEventListener("load", connect, { passive: true });
+        connect();
+      }
+
+      if (rootNode.shadowRoot) scan(rootNode.shadowRoot);
+      if (rootNode.querySelectorAll) {
+        for (const element of rootNode.querySelectorAll("*")) {
+          if (element.shadowRoot) scan(element.shadowRoot);
+        }
+      }
+    };
+
+    scan(doc);
+    const Observer = doc.defaultView?.MutationObserver || MutationObserver;
+    const observer = new Observer((records) => {
+      for (const record of records) {
+        for (const node of record.addedNodes || []) {
+          if (node.nodeType === 1 || node.nodeType === 11) scan(node);
+        }
+      }
+    });
+    observer.observe(doc.documentElement || doc, { childList: true, subtree: true });
+    this.documentBridgeObservers.push(observer);
+  };
+
+
+  TextExpressApp.prototype.init = function () {
+    this.activeSequenceId = null;
+    this.sequenceMenu = null;
+    this.sequenceSearchInput = null;
+    this.sequenceList = null;
+    this.bridgedDocuments = new WeakSet();
+    this.documentBridgeObservers = [];
+
+    const result = teV22Original.init.call(this);
+    this.ensureSequenceMenu();
+    this.installDocumentBridge(document);
+    this.root.dataset.version = "22.0.0";
     return result;
   };
 

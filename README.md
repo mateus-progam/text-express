@@ -1,30 +1,70 @@
-# Text Express 21.0
+# Text Express 22.0
 
 Ferramenta flutuante para localizar, visualizar, inserir e organizar textos de Atendimento e Protocolo.
 
-## Alterações da versão 21.0
+## Novidade principal: sequências numeradas
 
-### Visualização dos cards
+As sequências continuam exclusivas da área **Atendimento** e agora possuem um menu persistente.
 
-- clicar em qualquer card abre imediatamente o conteúdo completo no painel direito;
-- sequências exibem todas as falas, campos e etapas;
-- modelos únicos e protocolos exibem o texto integral;
-- o card aberto fica destacado;
-- a seleção continua sendo salva no estado visual;
-- também é possível abrir o card com Enter ou Espaço quando ele estiver focado.
+O menu pode ser aberto de duas formas:
 
-### Atalhos separados por área
+- digitando o atalho principal da sequência, como `/semgerencia`, e pressionando o gatilho configurado;
+- clicando no botão **ABRIR SEQUÊNCIA** existente no card ou no painel de detalhes.
 
-- na aba Atendimento, os atalhos procuram somente modelos de Atendimento;
-- na aba Protocolo, os atalhos procuram somente modelos de Protocolo;
-- o mesmo atalho pode existir uma vez em Atendimento e uma vez em Protocolo, com textos diferentes;
-- atalhos repetidos dentro da mesma área continuam sendo impedidos;
-- em Favoritos, o atalho acompanha o tipo do card favorito selecionado.
+Quando o menu estiver aberto:
+
+- digitar `1`, `2`, `3` etc. em um campo de chat vazio insere a pergunta correspondente;
+- o número serve somente para escolher a pergunta e não é inserido no chat;
+- clicar em uma pergunta também insere o texto no último campo de atendimento utilizado;
+- palavras-chave, como `/led`, `/mexeu` ou `/foto`, podem ser cadastradas em cada pergunta;
+- o menu permanece aberto após cada inserção;
+- é possível alternar entre diferentes atendimentos sem fechar a sequência;
+- `ESC` ou o botão `X` fecham o menu;
+- o cabeçalho mostra qual sequência está aberta e quantas perguntas ela possui;
+- a busca localiza perguntas por número, nome, conteúdo ou palavra-chave.
+
+## Cadastro de palavras-chave
+
+Ao criar ou editar uma sequência, cada pergunta possui o campo **Palavras-chave desta pergunta**.
 
 Exemplo:
 
-- Atendimento: `/semconexao` pode inserir uma resposta ao cliente;
-- Protocolo: `/semconexao` pode inserir um registro técnico diferente.
+```text
+/led, /mexeu, /foto
+```
+
+As palavras-chave adicionais funcionam enquanto a respectiva sequência estiver aberta. O atalho principal de cada pergunta continua funcionando normalmente.
+
+## Compatibilidade ampliada com chats
+
+A versão 22.0 melhora a inserção de textos em:
+
+- `input` e `textarea` comuns;
+- campos `contenteditable`;
+- editores controlados por frameworks;
+- componentes com Shadow DOM aberto;
+- iframes de mesma origem;
+- campos com `role="textbox"`.
+
+Iframes de outra origem continuam protegidos pelas regras de segurança do navegador. Nesses casos, quando a inserção direta não for permitida, o Text Express copia o texto para a área de transferência.
+
+## Recursos preservados
+
+A versão 22.0 mantém:
+
+- todos os modelos das versões anteriores;
+- dados existentes no `localStorage`;
+- categorias;
+- sequências de Atendimento;
+- Protocolos;
+- favoritos;
+- importação completa e mesclagem;
+- nome do atendente memorizado;
+- salvamento automático;
+- posições e estado visual;
+- separação de atalhos entre Atendimento e Protocolo;
+- visualização completa ao clicar nos cards;
+- bookmarklet compacto.
 
 ## Favorito compacto
 
@@ -34,13 +74,9 @@ Salve o código abaixo como endereço de um favorito do navegador:
 javascript:(()=>{const s=document.createElement('script');s.src='https://king-programador.github.io/text-express/bookmarklet.js?v='+Date.now();(document.head||document.documentElement).appendChild(s)})()
 ```
 
-Toda a lógica de carregamento fica no arquivo `bookmarklet.js`. Por isso, o comando salvo no favorito fica pequeno.
-
-O endereço já está configurado para a conta **King-Programador**. No GitHub Pages, o domínio é exibido em minúsculas: `king-programador.github.io`.
-
 ## Arquivos para o GitHub
 
-Envie somente:
+Envie somente estes cinco arquivos:
 
 - `index.html`
 - `styles.css`
@@ -50,23 +86,7 @@ Envie somente:
 
 Depois da publicação, pressione `Ctrl + F5` no sistema de trabalho.
 
-## Dados existentes
+## Endereços do projeto
 
-A versão 21.0 preserva:
-
-- dados do `localStorage`;
-- modelos e categorias;
-- sequências de Atendimento;
-- Protocolos;
-- favoritos;
-- importação completa e mesclagem;
-- nome do atendente memorizado;
-- salvamento automático;
-- posições e estado visual.
-
-
-## Correção do endereço do GitHub
-
-- repositório: `https://github.com/King-Programador/text-express`;
-- GitHub Pages: `https://king-programador.github.io/text-express/`;
-- o `bookmarklet.js` também usa esse novo endereço como fallback.
+- Repositório: `https://github.com/King-Programador/text-express`
+- GitHub Pages: `https://king-programador.github.io/text-express/`

@@ -3531,3 +3531,385 @@
   outline: 2px solid var(--te-primary);
   outline-offset: 2px;
 }
+
+/* ==========================================================
+   Text Express 22.0 — menu persistente de sequências
+   ========================================================== */
+#text-express-app .te-sequence-menu {
+  position: fixed;
+  right: 26px;
+  bottom: 26px;
+  z-index: 2147483646;
+  display: flex;
+  flex-direction: column;
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(760px, calc(100vh - 32px));
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--te-primary) 44%, var(--te-border));
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--te-header) 96%, #172554) 0%, color-mix(in srgb, var(--te-header) 88%, #111827) 100%);
+  color: #f8fbff;
+  box-shadow: 0 28px 90px rgba(3, 10, 28, .55), 0 0 0 1px rgba(255,255,255,.05) inset;
+  pointer-events: auto;
+}
+
+#text-express-app .te-sequence-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 17px 14px;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+}
+
+#text-express-app .te-sequence-menu-title-wrap,
+#text-express-app .te-sequence-menu-meta,
+#text-express-app .te-sequence-menu-kicker {
+  display: flex;
+  align-items: center;
+}
+
+#text-express-app .te-sequence-menu-title-wrap {
+  min-width: 0;
+  gap: 11px;
+}
+
+#text-express-app .te-sequence-menu-title-wrap > div {
+  min-width: 0;
+}
+
+#text-express-app .te-sequence-menu-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #7c3aed, #4f46e5);
+  box-shadow: 0 10px 25px rgba(124,58,237,.35);
+}
+
+#text-express-app .te-sequence-menu-icon .te-icon {
+  width: 21px;
+  height: 21px;
+}
+
+#text-express-app .te-sequence-menu-kicker {
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 3px;
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .06em;
+}
+
+#text-express-app .te-sequence-open-badge {
+  padding: 3px 8px;
+  border: 1px solid rgba(74,222,128,.28);
+  border-radius: 999px;
+  background: rgba(22,163,74,.2);
+  color: #86efac;
+  font-size: 9px;
+  letter-spacing: .02em;
+  text-transform: none;
+}
+
+#text-express-app .te-sequence-menu-title-wrap strong {
+  display: block;
+  overflow: hidden;
+  color: #fff;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#text-express-app .te-sequence-menu-meta {
+  flex: 0 0 auto;
+  gap: 11px;
+  color: #dbeafe;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+#text-express-app .te-sequence-close {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 4px;
+  min-width: 50px;
+  min-height: 36px;
+  padding: 6px 8px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px;
+  background: rgba(255,255,255,.06);
+  color: #fff;
+}
+
+#text-express-app .te-sequence-close:hover {
+  background: rgba(255,255,255,.12);
+}
+
+#text-express-app .te-sequence-close .te-icon {
+  width: 16px;
+  height: 16px;
+}
+
+#text-express-app .te-sequence-close small {
+  color: #94a3b8;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+#text-express-app .te-sequence-search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 13px 14px 10px;
+  padding: 0 12px;
+  min-height: 43px;
+  border: 1px solid rgba(148,163,184,.28);
+  border-radius: 12px;
+  background: rgba(15,23,42,.48);
+  color: #94a3b8;
+}
+
+#text-express-app .te-sequence-search:focus-within {
+  border-color: #8b5cf6;
+  box-shadow: 0 0 0 3px rgba(139,92,246,.18);
+}
+
+#text-express-app .te-sequence-search .te-icon {
+  width: 17px;
+  height: 17px;
+}
+
+#text-express-app .te-sequence-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #fff;
+}
+
+#text-express-app .te-sequence-search input::placeholder {
+  color: #8291aa;
+}
+
+#text-express-app .te-sequence-list {
+  display: grid;
+  gap: 8px;
+  overflow: auto;
+  padding: 2px 14px 13px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(139,92,246,.6) transparent;
+}
+
+#text-express-app .te-sequence-item {
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid rgba(148,163,184,.22);
+  border-radius: 13px;
+  background: rgba(15,23,42,.5);
+  color: #fff;
+  text-align: left;
+  transition: border-color .16s ease, background .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+
+#text-express-app .te-sequence-item:hover,
+#text-express-app .te-sequence-item:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(139,92,246,.78);
+  background: rgba(49,46,129,.35);
+  box-shadow: 0 9px 24px rgba(0,0,0,.18);
+  outline: none;
+}
+
+#text-express-app .te-sequence-item.te-current {
+  border-color: #8b5cf6;
+  background: linear-gradient(135deg, rgba(91,33,182,.38), rgba(30,41,59,.72));
+  box-shadow: 0 0 0 2px rgba(139,92,246,.14) inset;
+}
+
+#text-express-app .te-sequence-item.te-used {
+  border-color: rgba(74,222,128,.34);
+}
+
+#text-express-app .te-sequence-number {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #7c3aed, #4f46e5);
+  color: #fff;
+  font-size: 25px;
+  font-weight: 900;
+  box-shadow: 0 8px 18px rgba(79,70,229,.28);
+}
+
+#text-express-app .te-sequence-item-content {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+#text-express-app .te-sequence-item-content strong {
+  color: #fff;
+  font-size: 12.5px;
+}
+
+#text-express-app .te-sequence-item-content > span:not(.te-sequence-keywords) {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #cbd5e1;
+  font-size: 11px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+#text-express-app .te-sequence-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+#text-express-app .te-sequence-keywords code {
+  padding: 3px 6px;
+  border: 1px solid rgba(167,139,250,.34);
+  border-radius: 7px;
+  background: rgba(76,29,149,.24);
+  color: #c4b5fd;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+#text-express-app .te-sequence-keywords em {
+  color: #718096;
+  font-size: 9px;
+  font-style: normal;
+}
+
+#text-express-app .te-sequence-item-action {
+  display: grid;
+  place-items: center;
+  color: #a78bfa;
+}
+
+#text-express-app .te-sequence-item.te-used .te-sequence-item-action {
+  color: #4ade80;
+}
+
+#text-express-app .te-sequence-item-action .te-icon {
+  width: 18px;
+  height: 18px;
+}
+
+#text-express-app .te-sequence-menu-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 16px;
+  padding: 11px 15px 13px;
+  border-top: 1px solid rgba(255,255,255,.09);
+  background: rgba(15,23,42,.42);
+  color: #94a3b8;
+  font-size: 9.5px;
+}
+
+#text-express-app .te-sequence-menu-footer span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+#text-express-app .te-sequence-menu-footer .te-icon {
+  width: 13px;
+  height: 13px;
+  color: #a78bfa;
+}
+
+#text-express-app .te-sequence-empty {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  min-height: 150px;
+  padding: 20px;
+  border: 1px dashed rgba(148,163,184,.28);
+  border-radius: 13px;
+  color: #94a3b8;
+  text-align: center;
+}
+
+#text-express-app .te-sequence-empty .te-icon {
+  width: 28px;
+  height: 28px;
+  color: #a78bfa;
+}
+
+#text-express-app .te-sequence-empty strong {
+  color: #e2e8f0;
+}
+
+#text-express-app .te-sequence-open-detail {
+  white-space: nowrap;
+}
+
+#text-express-app .te-flow-keywords-field {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+}
+
+#text-express-app .te-flow-keywords-field > span {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+#text-express-app .te-flow-keywords-field input {
+  width: 100%;
+}
+
+#text-express-app .te-flow-keywords-field small {
+  color: var(--te-muted);
+  font-size: 9.5px;
+}
+
+@media (max-width: 680px) {
+  #text-express-app .te-sequence-menu {
+    right: 8px;
+    bottom: 8px;
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+    border-radius: 16px;
+  }
+
+  #text-express-app .te-sequence-menu-header {
+    align-items: flex-start;
+  }
+
+  #text-express-app .te-sequence-menu-meta {
+    flex-direction: column-reverse;
+    align-items: flex-end;
+    gap: 5px;
+  }
+
+  #text-express-app .te-sequence-item {
+    grid-template-columns: 44px minmax(0, 1fr) 22px;
+    gap: 8px;
+  }
+
+  #text-express-app .te-sequence-number {
+    width: 44px;
+    height: 44px;
+    font-size: 21px;
+  }
+}
