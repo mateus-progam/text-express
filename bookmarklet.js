@@ -1,4 +1,4 @@
-/* Text Express 27.0 — carregador compacto */
+/* Text Express 27.1 — carregador compacto */
 (async () => {
   "use strict";
 

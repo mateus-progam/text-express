@@ -1,12 +1,12 @@
 /*
- * Text Express 27.0.0
+ * Text Express 27.1.0
  * Expansor de textos para atendimento e registro de protocolos.
  * Sem dependências externas.
  */
 (() => {
   "use strict";
 
-  const APP_VERSION = "27.0.0";
+  const APP_VERSION = "27.1.0";
   const STORAGE_KEYS = Object.freeze({
     snippets: "text_express_snippets",
     darkMode: "te_dark_mode",
@@ -9830,6 +9830,271 @@
     const result = teV27Original.init.call(this);
     this.ensureSequenceMenu();
     this.root.dataset.version = APP_VERSION;
+    return result;
+  };
+
+
+  /* ==========================================================
+   * Text Express 27.1 — fluxo de Protocolo com duas saídas fixas
+   * ========================================================== */
+  const TE_V271_PROTOCOL_FLOW_PRESETS = Object.freeze([
+    Object.freeze({ nome: "Normalizado", shortcutSuffix: "1" }),
+    Object.freeze({ nome: "Aberto O.S.", shortcutSuffix: "2" })
+  ]);
+
+  const teV271Original = {
+    normalizeSnippet: TextExpressApp.prototype.normalizeSnippet,
+    openModal: TextExpressApp.prototype.openModal,
+    updateModelKindUI: TextExpressApp.prototype.updateModelKindUI,
+    renderFlowEditorSteps: TextExpressApp.prototype.renderFlowEditorSteps,
+    syncEditingFlowSteps: TextExpressApp.prototype.syncEditingFlowSteps,
+    addFlowEditorStep: TextExpressApp.prototype.addFlowEditorStep,
+    removeFlowEditorStep: TextExpressApp.prototype.removeFlowEditorStep,
+    validateProtocolFlowStep: TextExpressApp.prototype.validateProtocolFlowStep,
+    getWorkflowStepPreview: TextExpressApp.prototype.getWorkflowStepPreview,
+    renderSequenceMenu: TextExpressApp.prototype.renderSequenceMenu
+  };
+
+  TextExpressApp.prototype.buildProtocolFlowPair = function (steps = [], parentShortcut = "/fluxo") {
+    const source = Array.isArray(steps) ? steps.filter(Boolean) : [];
+    const normalizedParent = this.normalizeShortcut(parentShortcut || "/fluxo");
+    const used = new Set();
+    const normalizedNames = source.map((step) => this.normalizeSearchText(step?.nome || ""));
+
+    const pick = (index) => {
+      const preset = TE_V271_PROTOCOL_FLOW_PRESETS[index];
+      const patterns = index === 0
+        ? ["normalizado", "normal", "resolvido"]
+        : ["aberto os", "abertura os", "ordem de servico", "os aberta"];
+      let foundIndex = normalizedNames.findIndex((name, candidateIndex) =>
+        !used.has(candidateIndex) && patterns.some((pattern) => name.includes(pattern))
+      );
+      if (foundIndex < 0) foundIndex = source.findIndex((_, candidateIndex) => !used.has(candidateIndex));
+      if (foundIndex >= 0) used.add(foundIndex);
+      const existing = foundIndex >= 0 ? source[foundIndex] : {};
+      return this.normalizeFlowStep({
+        ...existing,
+        nome: preset.nome,
+        atalho: existing.atalho || `${normalizedParent}${preset.shortcutSuffix}`,
+        triggerKey: existing.triggerKey || "space",
+        conteudo: String(existing.conteudo || ""),
+        acaoTipo: existing.acaoTipo || TE_V27_FLOW_ACTIONS.INSERT,
+        opcional: false
+      }, index, normalizedParent);
+    };
+
+    return TE_V271_PROTOCOL_FLOW_PRESETS.map((_, index) => pick(index));
+  };
+
+  TextExpressApp.prototype.normalizeSnippet = function (raw = {}) {
+    const normalized = teV271Original.normalizeSnippet.call(this, raw);
+    if (normalized?.tipo !== "protocolo" || normalized?.modelo !== "fluxo") return normalized;
+
+    normalized.etapas = this.buildProtocolFlowPair(normalized.etapas, normalized.atalho);
+    normalized.conteudo = normalized.etapas
+      .map((step) => step.conteudo || this.describeFlowStepAction(step, { includeTargetName: false }))
+      .filter(Boolean)
+      .join("\n\n") || "Fluxo de protocolo";
+    normalized.variaveis = [...new Set(normalized.etapas.flatMap((step) => step.variaveis || []))];
+    return normalized;
+  };
+
+  TextExpressApp.prototype.openModal = function (data = null) {
+    teV271Original.openModal.call(this, data);
+    if (data?.tipo === "protocolo" && data?.modelo === "fluxo") {
+      this.editingFlowSteps = this.buildProtocolFlowPair(data.etapas, data.atalho);
+      this.renderFlowEditorSteps();
+      this.updateModelKindUI();
+    }
+  };
+
+  TextExpressApp.prototype.updateModelKindUI = function () {
+    teV271Original.updateModelKindUI.call(this);
+    const type = this.getFlowEditorType();
+    const kind = this.root.querySelector('input[name="te-model-kind"]:checked')?.value || "unico";
+    const isProtocolFlow = type === "protocolo" && kind === "fluxo";
+    const addButton = this.root.querySelector('[data-te-action="flow-step-add"]');
+    const help = this.root.querySelector("#te-flow-editor-help");
+    const title = this.root.querySelector("#te-modal-title");
+
+    addButton?.classList.toggle("te-hidden", isProtocolFlow);
+    if (isProtocolFlow) {
+      const baseShortcut = this.root.querySelector("#te-form-shortcut")?.value || "/fluxo";
+      this.editingFlowSteps = this.buildProtocolFlowPair(this.editingFlowSteps, baseShortcut);
+      if (help) help.textContent = "O fluxo de Protocolo possui somente duas opções: Normalizado e Aberto O.S. O texto de cada protocolo aparece no menu antes da escolha.";
+      this.renderFlowEditorSteps();
+    }
+
+    if (title) {
+      const editing = Boolean(this.editingId);
+      if (type === "protocolo") {
+        title.textContent = kind === "fluxo"
+          ? (editing ? "Editar fluxo de protocolo" : "Criar fluxo de protocolo")
+          : (editing ? "Editar protocolo" : "Criar protocolo");
+      } else if (kind === "fluxo") {
+        title.textContent = editing ? "Editar sequência de atendimento" : "Criar sequência de atendimento";
+      } else {
+        title.textContent = editing ? "Editar modelo de atendimento" : "Criar modelo de atendimento";
+      }
+    }
+  };
+
+  TextExpressApp.prototype.renderFlowEditorSteps = function () {
+    const type = this.getFlowEditorType();
+    if (type !== "protocolo") return teV271Original.renderFlowEditorSteps.call(this);
+
+    const container = this.root.querySelector("#te-flow-editor-steps");
+    if (!container) return;
+    const parentShortcut = this.root.querySelector("#te-form-shortcut")?.value || "/fluxo";
+    this.editingFlowSteps = this.buildProtocolFlowPair(this.editingFlowSteps, parentShortcut);
+    const flowTargets = this.getProtocolFlowTargets();
+    const sequenceTargets = this.getAttendanceSequenceTargets();
+
+    container.innerHTML = `
+      <p class="te-protocol-flow-fixed-note">${this.icon("info")}<span>Este fluxo é fixo e exibirá somente <strong>1. Normalizado</strong> e <strong>2. Aberto O.S.</strong>. Em cada opção, informe o protocolo que o usuário verá antes de executar a ação.</span></p>
+      ${this.editingFlowSteps.map((step, index) => {
+        const actionType = this.getFlowActionType(step);
+        const isInsert = actionType === TE_V27_FLOW_ACTIONS.INSERT;
+        const isFlow = actionType === TE_V27_FLOW_ACTIONS.FLOW;
+        const isSequence = actionType === TE_V27_FLOW_ACTIONS.SEQUENCE;
+        const isUrl = actionType === TE_V27_FLOW_ACTIONS.URL;
+        const isCustom = actionType === TE_V27_FLOW_ACTIONS.CUSTOM;
+        return `
+          <article class="te-flow-step-editor te-protocol-flow-step-editor" data-te-flow-editor-index="${index}">
+            <header>
+              <span class="te-flow-step-editor-number">${index + 1}</span>
+              <strong>${this.escapeHtml(step.nome)}</strong>
+            </header>
+            <div class="te-flow-step-editor-grid">
+              <input type="hidden" data-te-flow-field="nome" value="${this.escapeAttr(step.nome)}">
+              <label>
+                <span>Atalho direto</span>
+                <input type="text" data-te-flow-field="atalho" maxlength="60" value="${this.escapeAttr(step.atalho)}" spellcheck="false" placeholder="${this.escapeAttr(this.normalizeShortcut(parentShortcut))}${index + 1}">
+              </label>
+              <label>
+                <span>Ativar com</span>
+                <select data-te-flow-field="triggerKey">
+                  <option value="space" ${step.triggerKey === "space" ? "selected" : ""}>Espaço</option>
+                  <option value="tab" ${step.triggerKey === "tab" ? "selected" : ""}>Tab</option>
+                  <option value="enter" ${step.triggerKey === "enter" ? "selected" : ""}>Enter</option>
+                </select>
+              </label>
+              <label>
+                <span>Ação executada</span>
+                <select data-te-flow-field="acaoTipo">
+                  <option value="inserir" ${isInsert ? "selected" : ""}>Inserir o protocolo</option>
+                  <option value="fluxo" ${isFlow ? "selected" : ""}>Abrir outro fluxo</option>
+                  <option value="sequencia" ${isSequence ? "selected" : ""}>Abrir sequência do Atendimento</option>
+                  <option value="url" ${isUrl ? "selected" : ""}>Abrir atendimento externo</option>
+                  <option value="personalizada" ${isCustom ? "selected" : ""}>Executar ação personalizada</option>
+                </select>
+              </label>
+              <label class="te-flow-keywords-field">
+                <span>Palavras-chave desta opção</span>
+                <input type="text" data-te-flow-field="palavrasChave" value="${this.escapeAttr((step.palavrasChave || []).join(", "))}" spellcheck="false" placeholder="${index === 0 ? "/normalizado, /normal" : "/os, /aberto-os"}">
+                <small>Separe por vírgulas. Funcionam enquanto o fluxo estiver aberto.</small>
+              </label>
+              <label class="te-flow-step-content-field">
+                <span>Texto do protocolo exibido no menu</span>
+                <textarea rows="5" data-te-flow-field="conteudo" placeholder="Digite o protocolo completo da opção ${this.escapeAttr(step.nome)}...">${this.escapeHtml(step.conteudo)}</textarea>
+                <small>${isInsert ? "Este texto será exibido no menu e inserido no campo ativo." : "Este texto será exibido no menu para conferência; ao selecionar, a ação configurada abaixo será executada."}</small>
+              </label>
+              <label class="te-flow-step-content-field ${isFlow ? "" : "te-hidden"}" data-te-flow-action-panel="fluxo">
+                <span>Fluxo de destino</span>
+                <select data-te-flow-field="acaoAlvoIdFluxo">${this.renderFlowTargetOptions(flowTargets, step.acaoAlvoId, "Selecione outro fluxo de protocolo")}</select>
+                <small>O menu atual será substituído pelo fluxo escolhido e poderá voltar pela seta.</small>
+              </label>
+              <label class="te-flow-step-content-field ${isSequence ? "" : "te-hidden"}" data-te-flow-action-panel="sequencia">
+                <span>Sequência de destino</span>
+                <select data-te-flow-field="acaoAlvoIdSequencia">${this.renderFlowTargetOptions(sequenceTargets, step.acaoAlvoId, "Selecione uma sequência do Atendimento")}</select>
+              </label>
+              <label class="te-flow-step-content-field ${isUrl ? "" : "te-hidden"}" data-te-flow-action-panel="url">
+                <span>Endereço do atendimento externo</span>
+                <input type="url" data-te-flow-field="acaoUrl" value="${this.escapeAttr(step.acaoUrl || "")}" placeholder="https://sistema.exemplo/atendimento">
+                <small>São aceitos endereços HTTP ou HTTPS. A página será aberta em uma nova guia.</small>
+              </label>
+              <label class="te-flow-step-content-field ${isCustom ? "" : "te-hidden"}" data-te-flow-action-panel="personalizada">
+                <span>Identificador da ação personalizada</span>
+                <input type="text" data-te-flow-field="acaoPersonalizada" value="${this.escapeAttr(step.acaoPersonalizada || "")}" placeholder="ex.: abrir-painel-tecnico">
+                <small>A ação deve ser registrada por uma integração usando <code>registerProtocolFlowAction</code>.</small>
+              </label>
+            </div>
+          </article>`;
+      }).join("")}`;
+
+    this.updateFlowVariablePreview();
+  };
+
+  TextExpressApp.prototype.syncEditingFlowSteps = function () {
+    if (this.getFlowEditorType() !== "protocolo") return teV271Original.syncEditingFlowSteps.call(this);
+    const editors = [...this.root.querySelectorAll(".te-protocol-flow-step-editor")].slice(0, 2);
+    const parentShortcut = this.root.querySelector("#te-form-shortcut")?.value || "/fluxo";
+    const collected = editors.map((editor, index) => {
+      const get = (field) => editor.querySelector(`[data-te-flow-field="${field}"]`);
+      const actionType = this.getFlowActionType({ acaoTipo: get("acaoTipo")?.value });
+      const targetId = actionType === TE_V27_FLOW_ACTIONS.FLOW
+        ? get("acaoAlvoIdFluxo")?.value
+        : actionType === TE_V27_FLOW_ACTIONS.SEQUENCE
+          ? get("acaoAlvoIdSequencia")?.value
+          : "";
+      return this.normalizeFlowStep({
+        id: this.editingFlowSteps[index]?.id,
+        nome: TE_V271_PROTOCOL_FLOW_PRESETS[index].nome,
+        atalho: get("atalho")?.value,
+        conteudo: get("conteudo")?.value,
+        triggerKey: get("triggerKey")?.value,
+        opcional: false,
+        palavrasChave: get("palavrasChave")?.value,
+        acaoTipo: actionType,
+        acaoAlvoId: targetId,
+        acaoUrl: get("acaoUrl")?.value,
+        acaoPersonalizada: get("acaoPersonalizada")?.value
+      }, index, parentShortcut);
+    });
+    this.editingFlowSteps = this.buildProtocolFlowPair(collected, parentShortcut);
+    return this.editingFlowSteps;
+  };
+
+  TextExpressApp.prototype.addFlowEditorStep = function () {
+    if (this.getFlowEditorType() === "protocolo") {
+      this.showToast("O Fluxo de Protocolo possui somente Normalizado e Aberto O.S.");
+      return false;
+    }
+    return teV271Original.addFlowEditorStep.call(this);
+  };
+
+  TextExpressApp.prototype.removeFlowEditorStep = function (index) {
+    if (this.getFlowEditorType() === "protocolo") return false;
+    return teV271Original.removeFlowEditorStep.call(this, index);
+  };
+
+  TextExpressApp.prototype.validateProtocolFlowStep = function (step, index) {
+    if (!String(step?.conteudo || "").trim()) {
+      return `Preencha o texto do protocolo “${TE_V271_PROTOCOL_FLOW_PRESETS[index]?.nome || `opção ${index + 1}`}”.`;
+    }
+    return teV271Original.validateProtocolFlowStep.call(this, step, index);
+  };
+
+  TextExpressApp.prototype.getWorkflowStepPreview = function (flow, step) {
+    if (flow?.tipo === "protocolo") {
+      return String(step?.conteudo || "").trim() || this.describeFlowStepAction(step);
+    }
+    return teV271Original.getWorkflowStepPreview.call(this, flow, step);
+  };
+
+  TextExpressApp.prototype.renderSequenceMenu = function () {
+    const result = teV271Original.renderSequenceMenu.call(this);
+    const flow = this.getActiveSequence();
+    if (flow?.tipo === "protocolo") {
+      this.sequenceList?.querySelectorAll(".te-sequence-item").forEach((item) => {
+        const index = Number(item.dataset.teStepIndex);
+        const preview = item.querySelector(".te-sequence-item-content > span:not(.te-sequence-keywords):not(.te-protocol-action-inline)");
+        if (preview) {
+          preview.classList.add("te-protocol-preview");
+          preview.title = this.getWorkflowStepPreview(flow, flow.etapas[index]);
+        }
+      });
+    }
     return result;
   };
 

@@ -2078,24 +2078,57 @@
   opacity: 0;
 }
 
-#text-express-app .te-model-kind-selector span {
+#text-express-app .te-model-kind-selector label > span {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 34px;
+  justify-content: flex-start;
+  gap: 9px;
+  min-height: 46px;
+  padding: 9px 13px;
   border: 1px solid var(--te-border);
-  border-radius: 8px;
+  border-radius: 11px;
   background: var(--te-surface);
   color: var(--te-muted);
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: border-color .16s ease, background .16s ease, color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+#text-express-app .te-model-kind-selector label > span:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--te-primary) 55%, var(--te-border));
+  background: var(--te-surface-2);
+}
+
+#text-express-app .te-model-kind-selector label > span > .te-icon {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+}
+
+#text-express-app .te-model-kind-selector [data-te-kind-label] {
+  display: inline;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+}
+
+#text-express-app .te-model-kind-selector input:focus-visible + span {
+  box-shadow: var(--te-ring);
 }
 
 #text-express-app .te-model-kind-selector input:checked + span {
   border-color: var(--te-primary);
-  background: var(--te-primary-soft);
+  background: color-mix(in srgb, var(--te-primary) 13%, var(--te-surface));
   color: var(--te-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--te-primary) 12%, transparent);
 }
 
 #text-express-app .te-flow-editor {
@@ -4147,4 +4180,95 @@
   .te-sequence-back small {
     display: none;
   }
+}
+
+
+/* ==========================================================
+ * Text Express 27.1 — acabamento do modal e fluxo fixo de Protocolo
+ * ========================================================== */
+#text-express-app #te-snippet-modal #te-modal-kicker {
+  display: none !important;
+}
+
+#text-express-app #te-snippet-modal #te-modal-title {
+  margin: 0;
+  color: var(--te-text);
+  font-size: 19px;
+  font-weight: 850;
+  letter-spacing: -.015em;
+}
+
+#text-express-app .te-protocol-flow-fixed-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--te-primary) 26%, var(--te-border));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--te-primary) 7%, var(--te-surface));
+  color: var(--te-text-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+#text-express-app .te-protocol-flow-fixed-note .te-icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--te-primary);
+}
+
+#text-express-app .te-protocol-flow-step-editor > header > strong {
+  font-size: 12px;
+}
+
+#text-express-app .te-protocol-flow-step-editor .te-flow-step-content-field {
+  padding-top: 2px;
+}
+
+#text-express-app .te-protocol-flow-step-editor .te-flow-step-content-field textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+#text-express-app .te-protocol-workflow-menu .te-sequence-item-content > .te-protocol-preview {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #dbe5f3;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+#text-express-app .te-protocol-workflow-menu .te-sequence-item {
+  align-items: flex-start;
+}
+
+#text-express-app .te-protocol-workflow-menu .te-sequence-item-action {
+  padding-top: 16px;
+}
+
+@media (max-width: 560px) {
+  #text-express-app .te-model-kind-selector {
+    grid-template-columns: 1fr;
+  }
+}
+
+#text-express-app .te-model-kind-selector [data-te-kind-label] {
+  display: contents !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#text-express-app.te-fullscreen-active .te-model-kind-selector label > span {
+  min-height: 46px;
+  padding: 9px 13px;
+  font-size: 12px;
 }
