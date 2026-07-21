@@ -1,12 +1,12 @@
 /*
- * Text Express 26.0.0
+ * Text Express 27.0.0
  * Expansor de textos para atendimento e registro de protocolos.
  * Sem dependências externas.
  */
 (() => {
   "use strict";
 
-  const APP_VERSION = "26.0.0";
+  const APP_VERSION = "27.0.0";
   const STORAGE_KEYS = Object.freeze({
     snippets: "text_express_snippets",
     darkMode: "te_dark_mode",
@@ -8263,6 +8263,1572 @@
     this.render();
     this.restoreCurrentUiPositions?.();
     this.saveUiState?.();
+    this.root.dataset.version = APP_VERSION;
+    return result;
+  };
+
+
+
+  /* ==========================================================
+   * Text Express — captura persistente do chat de Atendimento
+   * Candidato de compatibilidade para a próxima versão.
+   *
+   * O listener delegado no document continua sendo a via normal.
+   * Esta camada adicional atua somente quando o editor do chat:
+   * - intercepta o keydown antes de ele alcançar o document;
+   * - recria o campo dentro de Shadow DOM, inclusive fechado;
+   * - move o editor para um iframe acessível da mesma origem;
+   * - substitui repetidamente o DOM durante o atendimento.
+   * ========================================================== */
+  const teChatCompatibilityOriginal = Object.freeze({
+    init: TextExpressApp.prototype.init
+  });
+
+  TextExpressApp.prototype.claimPersistentShortcutEvent = function (event) {
+    if (!event || this.persistentShortcutHandledEvents.has(event)) return false;
+    this.persistentShortcutHandledEvents.add(event);
+    event.preventDefault?.();
+    event.stopImmediatePropagation?.();
+    event.stopPropagation?.();
+    return true;
+  };
+
+  TextExpressApp.prototype.getDeepActiveEditable = function (sourceDocument = document) {
+    let currentDocument = sourceDocument;
+    const visited = new Set();
+
+    try {
+      while (currentDocument && !visited.has(currentDocument)) {
+        visited.add(currentDocument);
+        let active = currentDocument.activeElement;
+        if (!active) return null;
+
+        while (active) {
+          const editable = this.getEditableRoot(active);
+          if (editable) return editable;
+
+          if (String(active.tagName || "").toLowerCase() === "iframe") {
+            try {
+              currentDocument = active.contentDocument;
+              active = currentDocument?.activeElement || null;
+              if (active) continue;
+            } catch (error) {
+              return null;
+            }
+          }
+
+          const shadowActive = active.shadowRoot?.activeElement;
+          if (shadowActive) {
+            active = shadowActive;
+            continue;
+          }
+
+          return null;
+        }
+      }
+    } catch (error) {
+      return null;
+    }
+
+    return null;
+  };
+
+  TextExpressApp.prototype.resolvePersistentShortcutEditable = function (event) {
+    const eventEditable = this.getEditableFromEvent?.(event);
+    if (eventEditable) return eventEditable;
+
+    const eventDocument = event?.target?.ownerDocument
+      || event?.view?.document
+      || event?.currentTarget?.document
+      || document;
+    const activeEditable = this.getDeepActiveEditable(eventDocument);
+    if (activeEditable) return activeEditable;
+
+    if (
+      this.lastActiveElement?.isConnected &&
+      this.getEditableRoot(this.lastActiveElement)
+    ) {
+      return this.lastActiveElement;
+    }
+
+    return null;
+  };
+
+  TextExpressApp.prototype.onPersistentShortcutKeyDown = function (event) {
+    if (
+      !event ||
+      this.persistentShortcutHandledEvents.has(event) ||
+      event.isComposing ||
+      event.ctrlKey ||
+      event.altKey ||
+      event.metaKey
+    ) {
+      return;
+    }
+
+    const editable = this.resolvePersistentShortcutEditable(event);
+    if (!editable || this.root.contains(editable)) return;
+
+    this.lastActiveElement = editable;
+    this.captureContentEditableRange(editable);
+
+    if (this.isSequenceMenuOpen?.()) {
+      const flow = this.getActiveSequence?.();
+
+      if (
+        /^[1-9]$/.test(event.key) &&
+        this.isEditableBlankForNumberSelection?.(editable)
+      ) {
+        const stepIndex = Number(event.key) - 1;
+        if (flow?.etapas?.[stepIndex]) {
+          const context = this.captureInsertionContext(editable, 0);
+          if (!context || !this.claimPersistentShortcutEvent(event)) return;
+          void this.insertSequenceStep(flow.id, stepIndex, context);
+          return;
+        }
+      }
+
+      const sequenceTrigger = this.getTriggerKey(event);
+      if (sequenceTrigger) {
+        const aliasMatch = this.findActiveSequenceKeywordBeforeCaret?.(
+          editable,
+          sequenceTrigger
+        );
+        if (aliasMatch) {
+          const context = this.captureInsertionContext(
+            editable,
+            aliasMatch.shortcut.length
+          );
+          if (!context || !this.claimPersistentShortcutEvent(event)) return;
+          void this.insertSequenceStep(
+            aliasMatch.flow.id,
+            aliasMatch.stepIndex,
+            context
+          );
+          return;
+        }
+      }
+    }
+
+    if (!this.settings.autoExpand) return;
+    const triggerKey = this.getTriggerKey(event);
+    if (!triggerKey) return;
+
+    const match = this.findShortcutBeforeCaret(editable, triggerKey);
+    if (!match) return;
+
+    const context = this.captureInsertionContext(
+      editable,
+      match.shortcut.length
+    );
+    if (!context || !this.claimPersistentShortcutEvent(event)) return;
+
+    this.lastActiveElement = editable;
+    void this.expandShortcut(match.snippet, context);
+  };
+
+  TextExpressApp.prototype.installPersistentShortcutTarget = function (target) {
+    if (!target?.addEventListener || this.persistentShortcutTargets.has(target)) return;
+    this.persistentShortcutTargets.add(target);
+    target.addEventListener("keydown", this.onPersistentShortcutKeyDown, true);
+
+    if (target.nodeType === 11) {
+      target.addEventListener("focusin", this.onGlobalFocusIn, true);
+      target.addEventListener("selectionchange", this.onSelectionChange, true);
+    }
+  };
+
+  TextExpressApp.prototype.patchAttachShadowForWindow = function (targetWindow) {
+    const prototype = targetWindow?.Element?.prototype;
+    const current = prototype?.attachShadow;
+    if (!prototype || typeof current !== "function") return;
+
+    const installed = this.persistentAttachShadowPatches.get(prototype);
+    if (installed && prototype.attachShadow === installed.wrapper) return;
+
+    const app = this;
+    const original = current;
+    function attachShadow(init) {
+      const shadowRoot = original.call(this, init);
+      try {
+        app.bridgePersistentCompatibilityRoot(shadowRoot);
+      } catch (error) {
+        // O componente continua funcionando mesmo se o bridge for bloqueado.
+      }
+      return shadowRoot;
+    }
+
+    try {
+      Object.defineProperty(prototype, "attachShadow", {
+        configurable: true,
+        writable: true,
+        value: attachShadow
+      });
+      this.persistentAttachShadowPatches.set(prototype, {
+        original,
+        wrapper: attachShadow
+      });
+    } catch (error) {
+      // Alguns ambientes protegem o protótipo; os demais bridges permanecem.
+    }
+  };
+
+  TextExpressApp.prototype.connectPersistentIframe = function (iframe) {
+    if (!iframe || String(iframe.tagName || "").toLowerCase() !== "iframe") return;
+
+    if (!this.persistentIframeLoadTargets.has(iframe)) {
+      this.persistentIframeLoadTargets.add(iframe);
+      iframe.addEventListener("load", () => {
+        try {
+          if (iframe.contentDocument) {
+            this.bridgePersistentCompatibilityRoot(iframe.contentDocument);
+          }
+        } catch (error) {
+          // Iframes de outra origem são isolados pelo navegador.
+        }
+      }, { passive: true });
+    }
+
+    try {
+      if (iframe.contentDocument) {
+        this.bridgePersistentCompatibilityRoot(iframe.contentDocument);
+      }
+    } catch (error) {
+      // Iframes de outra origem são isolados pelo navegador.
+    }
+  };
+
+  TextExpressApp.prototype.scanPersistentCompatibilityNodeContents = function (rootNode) {
+    if (!rootNode?.querySelectorAll) return;
+
+    for (const iframe of rootNode.querySelectorAll("iframe")) {
+      this.connectPersistentIframe(iframe);
+    }
+
+    for (const element of rootNode.querySelectorAll("*")) {
+      if (element.shadowRoot) {
+        this.bridgePersistentCompatibilityRoot(element.shadowRoot);
+      }
+    }
+  };
+
+  TextExpressApp.prototype.scanPersistentCompatibilityNode = function (node) {
+    if (!node) return;
+
+    if (node.nodeType === 9 || node.nodeType === 11) {
+      this.bridgePersistentCompatibilityRoot(node);
+    }
+
+    if (node.nodeType !== 1 && node.nodeType !== 9 && node.nodeType !== 11) return;
+
+    if (String(node.tagName || "").toLowerCase() === "iframe") {
+      this.connectPersistentIframe(node);
+    }
+
+    if (node.shadowRoot) {
+      this.bridgePersistentCompatibilityRoot(node.shadowRoot);
+    }
+
+    this.scanPersistentCompatibilityNodeContents(node);
+  };
+
+  TextExpressApp.prototype.observePersistentCompatibilityRoot = function (rootNode) {
+    if (!rootNode || this.persistentCompatibilityObserverRecords.has(rootNode)) return;
+
+    const ownerDocument = rootNode.nodeType === 9 ? rootNode : rootNode.ownerDocument;
+    const Observer = ownerDocument?.defaultView?.MutationObserver || MutationObserver;
+    const observeTarget = rootNode.nodeType === 9 ? rootNode.documentElement : rootNode;
+    if (!Observer || !observeTarget) return;
+
+    try {
+      const observer = new Observer((records) => {
+        for (const record of records) {
+          for (const addedNode of record.addedNodes || []) {
+            this.scanPersistentCompatibilityNode(addedNode);
+          }
+        }
+      });
+      observer.observe(observeTarget, { childList: true, subtree: true });
+      this.persistentCompatibilityObserverRecords.set(rootNode, observer);
+    } catch (error) {
+      // O health check periódico ainda cobre documentos acessíveis.
+    }
+  };
+
+  TextExpressApp.prototype.bridgePersistentCompatibilityRoot = function (rootNode) {
+    if (!rootNode) return;
+
+    const ownerDocument = rootNode.nodeType === 9 ? rootNode : rootNode.ownerDocument;
+    const ownerWindow = ownerDocument?.defaultView;
+
+    if (ownerWindow) {
+      this.installPersistentShortcutTarget(ownerWindow);
+      this.patchAttachShadowForWindow(ownerWindow);
+      this.persistentCompatibilityDocuments.add(ownerDocument);
+    }
+
+    if (rootNode.nodeType === 11) {
+      this.installPersistentShortcutTarget(rootNode);
+    }
+
+    this.observePersistentCompatibilityRoot(rootNode);
+    this.scanPersistentCompatibilityNodeContents(rootNode);
+  };
+
+  TextExpressApp.prototype.isPersistentCompatibilityRootAlive = function (rootNode) {
+    if (!rootNode) return false;
+
+    if (rootNode.nodeType === 9) {
+      if (rootNode === document) return true;
+      try {
+        const ownerWindow = rootNode.defaultView;
+        return Boolean(
+          ownerWindow &&
+          ownerWindow.document === rootNode &&
+          ownerWindow.frameElement?.isConnected
+        );
+      } catch (error) {
+        return false;
+      }
+    }
+
+    if (rootNode.nodeType === 11 && rootNode.host) {
+      return Boolean(rootNode.host.isConnected);
+    }
+
+    return Boolean(rootNode.isConnected);
+  };
+
+  TextExpressApp.prototype.prunePersistentCompatibilityRoots = function () {
+    for (const [rootNode, observer] of this.persistentCompatibilityObserverRecords) {
+      if (this.isPersistentCompatibilityRootAlive(rootNode)) continue;
+      observer.disconnect?.();
+      this.persistentCompatibilityObserverRecords.delete(rootNode);
+      if (rootNode.nodeType === 9) {
+        this.persistentCompatibilityDocuments.delete(rootNode);
+      }
+    }
+  };
+
+  TextExpressApp.prototype.runPersistentShortcutHealthCheck = function () {
+    this.prunePersistentCompatibilityRoots();
+
+    for (const compatibleDocument of [...this.persistentCompatibilityDocuments]) {
+      try {
+        if (!compatibleDocument?.documentElement) continue;
+        const compatibleWindow = compatibleDocument.defaultView;
+        this.installPersistentShortcutTarget(compatibleWindow);
+        this.patchAttachShadowForWindow(compatibleWindow);
+
+        for (const iframe of compatibleDocument.querySelectorAll("iframe")) {
+          this.connectPersistentIframe(iframe);
+        }
+
+        let active = compatibleDocument.activeElement;
+        while (active) {
+          if (active.shadowRoot) {
+            this.bridgePersistentCompatibilityRoot(active.shadowRoot);
+            active = active.shadowRoot.activeElement;
+            continue;
+          }
+          break;
+        }
+      } catch (error) {
+        this.persistentCompatibilityDocuments.delete(compatibleDocument);
+      }
+    }
+  };
+
+  TextExpressApp.prototype.setupPersistentShortcutCapture = function () {
+    if (this.persistentShortcutCaptureReady) return;
+    this.persistentShortcutCaptureReady = true;
+
+    this.persistentShortcutHandledEvents = new WeakSet();
+    this.persistentShortcutTargets = new WeakSet();
+    this.persistentIframeLoadTargets = new WeakSet();
+    this.persistentAttachShadowPatches = new WeakMap();
+    this.persistentCompatibilityObserverRecords = new Map();
+    this.persistentCompatibilityDocuments = new Set();
+    this.onPersistentShortcutKeyDown = this.onPersistentShortcutKeyDown.bind(this);
+
+    this.bridgePersistentCompatibilityRoot(document);
+
+    this.persistentShortcutHealthTimer = window.setInterval(
+      () => this.runPersistentShortcutHealthCheck(),
+      2500
+    );
+
+    window.addEventListener("focus", () => this.runPersistentShortcutHealthCheck(), true);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) this.runPersistentShortcutHealthCheck();
+    }, true);
+    window.addEventListener("pagehide", () => {
+      if (this.persistentShortcutHealthTimer) {
+        window.clearInterval(this.persistentShortcutHealthTimer);
+        this.persistentShortcutHealthTimer = null;
+      }
+    }, { once: true });
+  };
+
+  TextExpressApp.prototype.init = function () {
+    this.setupPersistentShortcutCapture();
+    const result = teChatCompatibilityOriginal.init.call(this);
+    this.runPersistentShortcutHealthCheck();
+    return result;
+  };
+
+  /* ==========================================================
+   * Text Express 27.0 — Fluxos opcionais na área de Protocolos
+   * - reutiliza o menu, a pesquisa e a navegação das Sequências;
+   * - mantém protocolos comuns com inserção imediata;
+   * - permite inserir texto, abrir outro fluxo, abrir uma sequência,
+   *   abrir um endereço externo ou executar uma ação registrada;
+   * - suporta fluxos encadeados com navegação de retorno.
+   * ========================================================== */
+  const TE_V27_FLOW_ACTIONS = Object.freeze({
+    INSERT: "inserir",
+    FLOW: "fluxo",
+    SEQUENCE: "sequencia",
+    URL: "url",
+    CUSTOM: "personalizada"
+  });
+
+  const TE_V27_ALLOWED_FLOW_ACTIONS = new Set(Object.values(TE_V27_FLOW_ACTIONS));
+
+  const teV27Original = Object.freeze({
+    init: TextExpressApp.prototype.init,
+    normalizeFlowStep: TextExpressApp.prototype.normalizeFlowStep,
+    normalizeSnippet: TextExpressApp.prototype.normalizeSnippet,
+    getSnippetShortcutValues: TextExpressApp.prototype.getSnippetShortcutValues,
+    ensureUniqueSnippetShortcuts: TextExpressApp.prototype.ensureUniqueSnippetShortcuts,
+    createShortcutEntry: TextExpressApp.prototype.createShortcutEntry,
+    rebuildShortcutMap: TextExpressApp.prototype.rebuildShortcutMap,
+    openModal: TextExpressApp.prototype.openModal,
+    closeModal: TextExpressApp.prototype.closeModal,
+    updateModelKindUI: TextExpressApp.prototype.updateModelKindUI,
+    renderFlowEditorSteps: TextExpressApp.prototype.renderFlowEditorSteps,
+    syncEditingFlowSteps: TextExpressApp.prototype.syncEditingFlowSteps,
+    addFlowEditorStep: TextExpressApp.prototype.addFlowEditorStep,
+    removeFlowEditorStep: TextExpressApp.prototype.removeFlowEditorStep,
+    updateFlowVariablePreview: TextExpressApp.prototype.updateFlowVariablePreview,
+    collectSnippetFromForm: TextExpressApp.prototype.collectSnippetFromForm,
+    renderCard: TextExpressApp.prototype.renderCard,
+    renderFlowDetail: TextExpressApp.prototype.renderFlowDetail,
+    handleRootClick: TextExpressApp.prototype.handleRootClick,
+    handleRootChange: TextExpressApp.prototype.handleRootChange,
+    handleRootInput: TextExpressApp.prototype.handleRootInput,
+    getActiveSequence: TextExpressApp.prototype.getActiveSequence,
+    ensureSequenceMenu: TextExpressApp.prototype.ensureSequenceMenu,
+    renderSequenceMenu: TextExpressApp.prototype.renderSequenceMenu,
+    openSequenceMenu: TextExpressApp.prototype.openSequenceMenu,
+    closeSequenceMenu: TextExpressApp.prototype.closeSequenceMenu,
+    insertSnippet: TextExpressApp.prototype.insertSnippet,
+    copySnippet: TextExpressApp.prototype.copySnippet,
+    insertSequenceStep: TextExpressApp.prototype.insertSequenceStep,
+    insertFlowStep: TextExpressApp.prototype.insertFlowStep,
+    expandShortcut: TextExpressApp.prototype.expandShortcut,
+    resetFlow: TextExpressApp.prototype.resetFlow,
+    updateCount: TextExpressApp.prototype.updateCount
+  });
+
+  TextExpressApp.prototype.getFlowActionType = function (raw = {}) {
+    const rawAction = raw && typeof raw.acao === "object" ? raw.acao : {};
+    const candidate = String(
+      raw.acaoTipo ??
+      raw.actionType ??
+      raw.tipoAcao ??
+      rawAction.tipo ??
+      (typeof raw.acao === "string" ? raw.acao : "") ??
+      TE_V27_FLOW_ACTIONS.INSERT
+    ).trim().toLowerCase();
+
+    const aliases = {
+      insert: TE_V27_FLOW_ACTIONS.INSERT,
+      inserir_texto: TE_V27_FLOW_ACTIONS.INSERT,
+      texto: TE_V27_FLOW_ACTIONS.INSERT,
+      flow: TE_V27_FLOW_ACTIONS.FLOW,
+      abrir_fluxo: TE_V27_FLOW_ACTIONS.FLOW,
+      sequence: TE_V27_FLOW_ACTIONS.SEQUENCE,
+      abrir_sequencia: TE_V27_FLOW_ACTIONS.SEQUENCE,
+      link: TE_V27_FLOW_ACTIONS.URL,
+      abrir_url: TE_V27_FLOW_ACTIONS.URL,
+      external: TE_V27_FLOW_ACTIONS.URL,
+      custom: TE_V27_FLOW_ACTIONS.CUSTOM,
+      acao_personalizada: TE_V27_FLOW_ACTIONS.CUSTOM
+    };
+
+    const normalized = aliases[candidate] || candidate;
+    return TE_V27_ALLOWED_FLOW_ACTIONS.has(normalized)
+      ? normalized
+      : TE_V27_FLOW_ACTIONS.INSERT;
+  };
+
+  TextExpressApp.prototype.normalizeFlowStep = function (raw = {}, index = 0, parentShortcut = "/fluxo") {
+    const step = teV27Original.normalizeFlowStep.call(this, raw, index, parentShortcut);
+    const rawAction = raw && typeof raw.acao === "object" ? raw.acao : {};
+
+    step.acaoTipo = this.getFlowActionType(raw);
+    step.acaoAlvoId = String(
+      raw.acaoAlvoId ?? raw.targetId ?? raw.alvoId ?? rawAction.alvoId ?? rawAction.targetId ?? ""
+    ).trim().slice(0, 160);
+    step.acaoUrl = String(
+      raw.acaoUrl ?? raw.url ?? rawAction.url ?? ""
+    ).trim().slice(0, 2000);
+    step.acaoPersonalizada = String(
+      raw.acaoPersonalizada ?? raw.customAction ?? raw.actionKey ?? rawAction.chave ?? rawAction.key ?? ""
+    ).trim().slice(0, 120);
+
+    return step;
+  };
+
+  TextExpressApp.prototype.describeFlowStepAction = function (step, options = {}) {
+    const includeTargetName = options.includeTargetName !== false;
+    const type = this.getFlowActionType(step);
+
+    if (type === TE_V27_FLOW_ACTIONS.INSERT) {
+      return step.conteudo || "Inserir texto no campo ativo";
+    }
+
+    if (type === TE_V27_FLOW_ACTIONS.URL) {
+      return step.acaoUrl ? `Abrir ${step.acaoUrl}` : "Abrir atendimento externo";
+    }
+
+    if (type === TE_V27_FLOW_ACTIONS.CUSTOM) {
+      return step.acaoPersonalizada
+        ? `Executar ação “${step.acaoPersonalizada}”`
+        : "Executar ação personalizada";
+    }
+
+    const target = this.snippets?.find((item) => item.id === step.acaoAlvoId);
+    const targetName = includeTargetName && target?.nome ? ` “${target.nome}”` : "";
+    if (type === TE_V27_FLOW_ACTIONS.FLOW) return `Abrir outro fluxo${targetName}`;
+    if (type === TE_V27_FLOW_ACTIONS.SEQUENCE) return `Abrir sequência${targetName}`;
+    return "Executar opção";
+  };
+
+  TextExpressApp.prototype.getFlowActionIcon = function (step) {
+    const type = this.getFlowActionType(step);
+    if (type === TE_V27_FLOW_ACTIONS.FLOW) return "clipboard-list";
+    if (type === TE_V27_FLOW_ACTIONS.SEQUENCE) return "play-circle";
+    if (type === TE_V27_FLOW_ACTIONS.URL) return "globe";
+    if (type === TE_V27_FLOW_ACTIONS.CUSTOM) return "zap";
+    return "send";
+  };
+
+  TextExpressApp.prototype.getFlowActionLabel = function (step) {
+    const type = this.getFlowActionType(step);
+    if (type === TE_V27_FLOW_ACTIONS.FLOW) return "Outro fluxo";
+    if (type === TE_V27_FLOW_ACTIONS.SEQUENCE) return "Sequência";
+    if (type === TE_V27_FLOW_ACTIONS.URL) return "Atendimento externo";
+    if (type === TE_V27_FLOW_ACTIONS.CUSTOM) return "Ação personalizada";
+    return "Inserir texto";
+  };
+
+  TextExpressApp.prototype.normalizeSnippet = function (raw = {}) {
+    const tipo = raw.tipo === "protocolo" ? "protocolo" : "atendimento";
+    const isProtocolFlow = tipo === "protocolo" && raw.modelo === "fluxo" && Array.isArray(raw.etapas);
+
+    if (!isProtocolFlow) return teV27Original.normalizeSnippet.call(this, raw);
+
+    const parentShortcut = this.normalizeShortcut(
+      raw.atalho || raw.shortcut || this.suggestShortcutFromName(raw.nome || "fluxo")
+    );
+    const etapas = raw.etapas
+      .map((step, index) => this.normalizeFlowStep(step, index, parentShortcut))
+      .filter((step) => step.nome);
+    const joinedContent = etapas
+      .map((step) => step.conteudo || this.describeFlowStepAction(step, { includeTargetName: false }))
+      .filter(Boolean)
+      .join("\n\n");
+
+    const base = teV5Original.normalizeSnippet.call(this, {
+      ...raw,
+      tipo: "protocolo",
+      conteudo: joinedContent || String(raw.conteudo || "Fluxo de protocolo")
+    });
+
+    base.modelo = "fluxo";
+    base.atalho = parentShortcut;
+    base.etapas = etapas;
+    base.conteudo = joinedContent || "Fluxo de protocolo";
+    base.variaveis = [...new Set(etapas.flatMap((step) => step.variaveis || []))];
+    base.updatedAt = typeof raw.updatedAt === "string" ? raw.updatedAt : "";
+    base.revision = Number.isFinite(Number(raw.revision)) ? Number(raw.revision) : 0;
+
+    const reserved = new Set([this.normalizeShortcut(base.atalho)]);
+    for (const step of base.etapas) reserved.add(this.normalizeShortcut(step.atalho));
+    const aliasesUsed = new Set();
+    base.etapas = base.etapas.map((step) => {
+      const aliases = this.parseSequenceKeywords(step.palavrasChave || []);
+      step.palavrasChave = aliases.filter((keyword) => {
+        if (reserved.has(keyword) || aliasesUsed.has(keyword)) return false;
+        aliasesUsed.add(keyword);
+        return true;
+      });
+      return step;
+    });
+
+    return base;
+  };
+
+  TextExpressApp.prototype.getSnippetShortcutValues = function (snippet) {
+    if (!snippet) return [];
+    const values = [];
+    if (snippet.atalho) values.push(this.normalizeShortcut(snippet.atalho));
+    if (snippet.modelo === "fluxo" && Array.isArray(snippet.etapas)) {
+      for (const step of snippet.etapas) {
+        if (step?.atalho) values.push(this.normalizeShortcut(step.atalho));
+      }
+    }
+    return values;
+  };
+
+  TextExpressApp.prototype.ensureUniqueSnippetShortcuts = function (snippet, usedShortcuts) {
+    const used = usedShortcuts || new Set();
+    const originalParent = snippet.atalho;
+    snippet.atalho = this.makeUniqueShortcut(snippet.atalho, used);
+    used.add(snippet.atalho);
+    let renamed = snippet.atalho !== originalParent ? 1 : 0;
+
+    if (snippet.modelo === "fluxo" && Array.isArray(snippet.etapas)) {
+      snippet.etapas = snippet.etapas.map((step, index) => {
+        const normalizedStep = this.normalizeFlowStep(step, index, snippet.atalho);
+        const originalStep = normalizedStep.atalho;
+        normalizedStep.atalho = this.makeUniqueShortcut(normalizedStep.atalho, used);
+        used.add(normalizedStep.atalho);
+        if (normalizedStep.atalho !== originalStep) renamed += 1;
+        return normalizedStep;
+      });
+      snippet.conteudo = snippet.etapas
+        .map((step) => step.conteudo || this.describeFlowStepAction(step, { includeTargetName: false }))
+        .join("\n\n");
+      snippet.variaveis = [...new Set(snippet.etapas.flatMap((step) => step.variaveis || []))];
+    }
+
+    return renamed;
+  };
+
+  TextExpressApp.prototype.createShortcutEntry = function (snippet, step = null, stepIndex = -1) {
+    if (step) {
+      return {
+        kind: "flow-step",
+        snippet,
+        step,
+        stepIndex,
+        triggerKey: step.triggerKey
+      };
+    }
+    if (snippet.modelo === "fluxo") {
+      return {
+        kind: "flow",
+        snippet,
+        triggerKey: snippet.triggerKey
+      };
+    }
+    return teV27Original.createShortcutEntry.call(this, snippet, step, stepIndex);
+  };
+
+  TextExpressApp.prototype.rebuildShortcutMap = function () {
+    this.shortcutMapsByType = {
+      atendimento: new Map(),
+      protocolo: new Map()
+    };
+
+    for (const snippet of this.snippets) {
+      if (!snippet.ativo || !snippet.atalho) continue;
+      const map = this.shortcutMapsByType[snippet.tipo];
+      if (!map) continue;
+
+      map.set(this.normalizeShortcut(snippet.atalho), this.createShortcutEntry(snippet));
+      if (snippet.modelo === "fluxo") {
+        (snippet.etapas || []).forEach((step, index) => {
+          if (!step.atalho) return;
+          map.set(
+            this.normalizeShortcut(step.atalho),
+            this.createShortcutEntry(snippet, step, index)
+          );
+        });
+      }
+    }
+
+    const scope = this.getShortcutScopeType?.() || "atendimento";
+    this.shortcutMap = this.shortcutMapsByType[scope] || new Map();
+  };
+
+  TextExpressApp.prototype.getFlowEditorType = function () {
+    return this.root.querySelector('input[name="te-type"]:checked')?.value === "protocolo"
+      ? "protocolo"
+      : "atendimento";
+  };
+
+  TextExpressApp.prototype.getProtocolFlowTargets = function () {
+    return this.snippets
+      .filter((item) => item.tipo === "protocolo" && item.modelo === "fluxo" && item.id !== this.editingId)
+      .sort((first, second) => first.nome.localeCompare(second.nome, "pt-BR"));
+  };
+
+  TextExpressApp.prototype.getAttendanceSequenceTargets = function () {
+    return this.snippets
+      .filter((item) => item.tipo === "atendimento" && item.modelo === "fluxo")
+      .sort((first, second) => first.nome.localeCompare(second.nome, "pt-BR"));
+  };
+
+  TextExpressApp.prototype.renderFlowTargetOptions = function (targets, selectedId, placeholder) {
+    const exists = targets.some((item) => item.id === selectedId);
+    const unavailable = selectedId && !exists
+      ? `<option value="${this.escapeAttr(selectedId)}" selected>Destino indisponível</option>`
+      : "";
+    return `<option value="">${this.escapeHtml(placeholder)}</option>${unavailable}${targets.map((item) => `
+      <option value="${this.escapeAttr(item.id)}" ${item.id === selectedId ? "selected" : ""}>${this.escapeHtml(item.nome)} (${this.escapeHtml(item.atalho)})</option>`).join("")}`;
+  };
+
+  TextExpressApp.prototype.openModal = function (data = null) {
+    teV27Original.openModal.call(this, data);
+    const isFlow = data?.modelo === "fluxo";
+    if (isFlow) {
+      this.editingFlowSteps = (data.etapas || []).map((step, index) =>
+        this.normalizeFlowStep(step, index, data.atalho)
+      );
+      this.root.querySelectorAll('input[name="te-model-kind"]').forEach((input) => {
+        input.checked = input.value === "fluxo";
+      });
+      this.renderFlowEditorSteps();
+      this.updateModelKindUI();
+    }
+  };
+
+  TextExpressApp.prototype.updateModelKindUI = function () {
+    const type = this.getFlowEditorType();
+    const kindSelector = this.root.querySelector("#te-model-kind-selector");
+    const singleWrap = this.root.querySelector("#te-single-content-wrap");
+    const flowEditor = this.root.querySelector("#te-flow-editor");
+    const kind = this.root.querySelector('input[name="te-model-kind"]:checked')?.value || "unico";
+    const isFlow = kind === "fluxo";
+
+    kindSelector?.classList.remove("te-hidden");
+    singleWrap?.classList.toggle("te-hidden", isFlow);
+    flowEditor?.classList.toggle("te-hidden", !isFlow);
+
+    const legend = this.root.querySelector("#te-model-kind-legend");
+    const uniqueLabel = this.root.querySelector('[data-te-kind-label="unico"]');
+    const flowLabel = this.root.querySelector('[data-te-kind-label="fluxo"]');
+    if (legend) legend.textContent = type === "protocolo" ? "Formato do protocolo" : "Formato do atendimento";
+    if (uniqueLabel) uniqueLabel.textContent = type === "protocolo" ? "Protocolo comum" : "Fala única";
+    if (flowLabel) flowLabel.textContent = type === "protocolo" ? "Fluxo de protocolo" : "Sequência de falas";
+
+    const heading = this.root.querySelector("#te-flow-editor-title");
+    const help = this.root.querySelector("#te-flow-editor-help");
+    const addLabel = this.root.querySelector("#te-flow-add-label");
+    if (heading) heading.textContent = type === "protocolo" ? "Opções do fluxo" : "Falas da sequência";
+    if (help) {
+      help.textContent = type === "protocolo"
+        ? "O atalho principal ou o botão Inserir abre o menu. Cada opção pode executar uma ação diferente."
+        : "O atalho principal abre a sequência. Os atalhos numerados inserem uma fala diretamente.";
+    }
+    if (addLabel) addLabel.textContent = type === "protocolo" ? "Adicionar opção" : "Adicionar fala";
+
+    if (isFlow && this.editingFlowSteps.length < 2) {
+      const baseShortcut = this.root.querySelector("#te-form-shortcut")?.value || "/fluxo";
+      while (this.editingFlowSteps.length < 2) {
+        const index = this.editingFlowSteps.length;
+        this.editingFlowSteps.push(this.normalizeFlowStep({
+          nome: type === "protocolo" ? `Opção ${index + 1}` : `Fala ${index + 1}`,
+          atalho: `${this.normalizeShortcut(baseShortcut)}${index + 1}`,
+          conteudo: "",
+          acaoTipo: TE_V27_FLOW_ACTIONS.INSERT
+        }, index, baseShortcut));
+      }
+      this.renderFlowEditorSteps();
+    }
+
+    const title = this.root.querySelector("#te-modal-title");
+    if (!this.editingId && title) {
+      title.textContent = isFlow
+        ? type === "protocolo" ? "Criar fluxo de protocolo" : "Criar sequência de falas"
+        : "Criar modelo";
+    }
+    this.updateFlowVariablePreview();
+  };
+
+  TextExpressApp.prototype.renderFlowEditorSteps = function () {
+    const type = this.getFlowEditorType();
+    if (type !== "protocolo") return teV27Original.renderFlowEditorSteps.call(this);
+
+    const container = this.root.querySelector("#te-flow-editor-steps");
+    if (!container) return;
+    const flowTargets = this.getProtocolFlowTargets();
+    const sequenceTargets = this.getAttendanceSequenceTargets();
+
+    container.innerHTML = this.editingFlowSteps.map((step, index) => {
+      const actionType = this.getFlowActionType(step);
+      const isInsert = actionType === TE_V27_FLOW_ACTIONS.INSERT;
+      const isFlow = actionType === TE_V27_FLOW_ACTIONS.FLOW;
+      const isSequence = actionType === TE_V27_FLOW_ACTIONS.SEQUENCE;
+      const isUrl = actionType === TE_V27_FLOW_ACTIONS.URL;
+      const isCustom = actionType === TE_V27_FLOW_ACTIONS.CUSTOM;
+      return `
+        <article class="te-flow-step-editor te-protocol-flow-step-editor" data-te-flow-editor-index="${index}">
+          <header>
+            <span class="te-flow-step-editor-number">${index + 1}</span>
+            <strong>Opção ${index + 1}</strong>
+            <div class="te-flow-editor-actions">
+              <button class="te-icon-action" type="button" data-te-action="flow-editor-up" data-te-step-index="${index}" title="Mover para cima" ${index === 0 ? "disabled" : ""}>${this.icon("chevron-left")}</button>
+              <button class="te-icon-action" type="button" data-te-action="flow-editor-down" data-te-step-index="${index}" title="Mover para baixo" ${index === this.editingFlowSteps.length - 1 ? "disabled" : ""}>${this.icon("chevron-right")}</button>
+              <button class="te-icon-action te-delete" type="button" data-te-action="flow-editor-remove" data-te-step-index="${index}" title="Excluir opção">${this.icon("trash")}</button>
+            </div>
+          </header>
+          <div class="te-flow-step-editor-grid">
+            <label>
+              <span>Nome da opção</span>
+              <input type="text" data-te-flow-field="nome" maxlength="100" value="${this.escapeAttr(step.nome)}" placeholder="Ex.: Inserção normal">
+            </label>
+            <label>
+              <span>Atalho direto</span>
+              <input type="text" data-te-flow-field="atalho" maxlength="60" value="${this.escapeAttr(step.atalho)}" spellcheck="false" placeholder="/fluxo${index + 1}">
+            </label>
+            <label>
+              <span>Ativar com</span>
+              <select data-te-flow-field="triggerKey">
+                <option value="space" ${step.triggerKey === "space" ? "selected" : ""}>Espaço</option>
+                <option value="tab" ${step.triggerKey === "tab" ? "selected" : ""}>Tab</option>
+                <option value="enter" ${step.triggerKey === "enter" ? "selected" : ""}>Enter</option>
+              </select>
+            </label>
+            <label>
+              <span>Ação executada</span>
+              <select data-te-flow-field="acaoTipo">
+                <option value="inserir" ${isInsert ? "selected" : ""}>Inserir um script</option>
+                <option value="fluxo" ${isFlow ? "selected" : ""}>Abrir outro fluxo</option>
+                <option value="sequencia" ${isSequence ? "selected" : ""}>Abrir sequência do Atendimento</option>
+                <option value="url" ${isUrl ? "selected" : ""}>Abrir atendimento externo</option>
+                <option value="personalizada" ${isCustom ? "selected" : ""}>Executar ação personalizada</option>
+              </select>
+            </label>
+            <label class="te-flow-optional-check">
+              <input type="checkbox" data-te-flow-field="opcional" ${step.opcional ? "checked" : ""}>
+              <span>Opção complementar</span>
+            </label>
+            <label class="te-flow-keywords-field">
+              <span>Palavras-chave desta opção</span>
+              <input type="text" data-te-flow-field="palavrasChave" value="${this.escapeAttr((step.palavrasChave || []).join(", "))}" spellcheck="false" placeholder="/normal, /externo">
+              <small>Separe por vírgulas. Funcionam enquanto o fluxo estiver aberto.</small>
+            </label>
+            <label class="te-flow-step-content-field ${isInsert ? "" : "te-hidden"}" data-te-flow-action-panel="inserir">
+              <span>Texto inserido no protocolo</span>
+              <textarea rows="4" data-te-flow-field="conteudo" placeholder="Digite o script...">${this.escapeHtml(step.conteudo)}</textarea>
+            </label>
+            <label class="te-flow-step-content-field ${isFlow ? "" : "te-hidden"}" data-te-flow-action-panel="fluxo">
+              <span>Fluxo de destino</span>
+              <select data-te-flow-field="acaoAlvoIdFluxo">
+                ${this.renderFlowTargetOptions(flowTargets, step.acaoAlvoId, "Selecione outro fluxo de protocolo")}
+              </select>
+              <small>O menu atual será substituído pelo fluxo escolhido e poderá voltar pela seta.</small>
+            </label>
+            <label class="te-flow-step-content-field ${isSequence ? "" : "te-hidden"}" data-te-flow-action-panel="sequencia">
+              <span>Sequência de destino</span>
+              <select data-te-flow-field="acaoAlvoIdSequencia">
+                ${this.renderFlowTargetOptions(sequenceTargets, step.acaoAlvoId, "Selecione uma sequência do Atendimento")}
+              </select>
+            </label>
+            <label class="te-flow-step-content-field ${isUrl ? "" : "te-hidden"}" data-te-flow-action-panel="url">
+              <span>Endereço do atendimento externo</span>
+              <input type="url" data-te-flow-field="acaoUrl" value="${this.escapeAttr(step.acaoUrl || "")}" placeholder="https://sistema.exemplo/atendimento">
+              <small>São aceitos endereços HTTP ou HTTPS. A página será aberta em nova guia.</small>
+            </label>
+            <label class="te-flow-step-content-field ${isCustom ? "" : "te-hidden"}" data-te-flow-action-panel="personalizada">
+              <span>Identificador da ação personalizada</span>
+              <input type="text" data-te-flow-field="acaoPersonalizada" value="${this.escapeAttr(step.acaoPersonalizada || "")}" placeholder="ex.: abrir-painel-tecnico">
+              <small>A ação deve ser registrada por uma integração usando <code>registerProtocolFlowAction</code>.</small>
+            </label>
+          </div>
+        </article>`;
+    }).join("");
+
+    this.updateFlowVariablePreview();
+  };
+
+  TextExpressApp.prototype.syncEditingFlowSteps = function () {
+    const type = this.getFlowEditorType();
+    if (type !== "protocolo") return teV27Original.syncEditingFlowSteps.call(this);
+
+    const editors = [...this.root.querySelectorAll(".te-flow-step-editor")];
+    this.editingFlowSteps = editors.map((editor, index) => {
+      const get = (field) => editor.querySelector(`[data-te-flow-field="${field}"]`);
+      const actionType = this.getFlowActionType({ acaoTipo: get("acaoTipo")?.value });
+      const targetId = actionType === TE_V27_FLOW_ACTIONS.FLOW
+        ? get("acaoAlvoIdFluxo")?.value
+        : actionType === TE_V27_FLOW_ACTIONS.SEQUENCE
+          ? get("acaoAlvoIdSequencia")?.value
+          : "";
+
+      return this.normalizeFlowStep({
+        id: this.editingFlowSteps[index]?.id,
+        nome: get("nome")?.value,
+        atalho: get("atalho")?.value,
+        conteudo: get("conteudo")?.value,
+        triggerKey: get("triggerKey")?.value,
+        opcional: Boolean(get("opcional")?.checked),
+        palavrasChave: get("palavrasChave")?.value,
+        acaoTipo: actionType,
+        acaoAlvoId: targetId,
+        acaoUrl: get("acaoUrl")?.value,
+        acaoPersonalizada: get("acaoPersonalizada")?.value
+      }, index, this.root.querySelector("#te-form-shortcut")?.value || "/fluxo");
+    });
+    return this.editingFlowSteps;
+  };
+
+  TextExpressApp.prototype.addFlowEditorStep = function () {
+    if (this.getFlowEditorType() !== "protocolo") return teV27Original.addFlowEditorStep.call(this);
+    this.syncEditingFlowSteps();
+    const index = this.editingFlowSteps.length;
+    const parent = this.root.querySelector("#te-form-shortcut")?.value || "/fluxo";
+    this.editingFlowSteps.push(this.normalizeFlowStep({
+      nome: `Opção ${index + 1}`,
+      atalho: `${this.normalizeShortcut(parent)}${index + 1}`,
+      conteudo: "",
+      acaoTipo: TE_V27_FLOW_ACTIONS.INSERT
+    }, index, parent));
+    this.renderFlowEditorSteps();
+  };
+
+  TextExpressApp.prototype.removeFlowEditorStep = function (index) {
+    if (this.getFlowEditorType() !== "protocolo") return teV27Original.removeFlowEditorStep.call(this, index);
+    this.syncEditingFlowSteps();
+    if (this.editingFlowSteps.length <= 2) {
+      this.root.querySelector("#te-flow-error").textContent = "Um fluxo precisa ter pelo menos duas opções.";
+      return;
+    }
+    this.editingFlowSteps.splice(index, 1);
+    this.renderFlowEditorSteps();
+  };
+
+  TextExpressApp.prototype.updateFlowVariablePreview = function () {
+    const kind = this.root.querySelector('input[name="te-model-kind"]:checked')?.value || "unico";
+    if (kind !== "fluxo") return;
+    if (this.getFlowEditorType() !== "protocolo") {
+      return teV27Original.updateFlowVariablePreview.call(this);
+    }
+
+    const current = this.root.querySelectorAll(".te-flow-step-editor").length
+      ? this.syncEditingFlowSteps()
+      : this.editingFlowSteps;
+    const variables = [...new Set(current
+      .filter((step) => this.getFlowActionType(step) === TE_V27_FLOW_ACTIONS.INSERT)
+      .flatMap((step) => this.extractVariables(step.conteudo)))];
+    const preview = this.root.querySelector("#te-variable-preview");
+    if (preview) {
+      preview.innerHTML = variables.length
+        ? variables.map((variable) => `<span class="te-variable-tag">${this.escapeHtml(variable)}</span>`).join("")
+        : '<span class="te-muted">Nenhuma variável encontrada.</span>';
+    }
+  };
+
+  TextExpressApp.prototype.isSafeExternalFlowUrl = function (value) {
+    try {
+      const url = new URL(String(value || "").trim(), window.location.href);
+      return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+    } catch (error) {
+      return "";
+    }
+  };
+
+  TextExpressApp.prototype.validateProtocolFlowStep = function (step, index) {
+    if (!step.nome) return `Preencha o nome da opção ${index + 1}.`;
+    const actionType = this.getFlowActionType(step);
+    if (actionType === TE_V27_FLOW_ACTIONS.INSERT && !step.conteudo) {
+      return `Preencha o texto da opção ${index + 1}.`;
+    }
+    if (actionType === TE_V27_FLOW_ACTIONS.FLOW) {
+      const target = this.snippets.find((item) => item.id === step.acaoAlvoId && item.tipo === "protocolo" && item.modelo === "fluxo");
+      if (!target) return `Selecione o fluxo de destino da opção ${index + 1}.`;
+    }
+    if (actionType === TE_V27_FLOW_ACTIONS.SEQUENCE) {
+      const target = this.snippets.find((item) => item.id === step.acaoAlvoId && item.tipo === "atendimento" && item.modelo === "fluxo");
+      if (!target) return `Selecione a sequência de destino da opção ${index + 1}.`;
+    }
+    if (actionType === TE_V27_FLOW_ACTIONS.URL && !this.isSafeExternalFlowUrl(step.acaoUrl)) {
+      return `Informe um endereço HTTP ou HTTPS válido na opção ${index + 1}.`;
+    }
+    if (actionType === TE_V27_FLOW_ACTIONS.CUSTOM && !step.acaoPersonalizada) {
+      return `Informe o identificador da ação personalizada na opção ${index + 1}.`;
+    }
+    return "";
+  };
+
+  TextExpressApp.prototype.collectSnippetFromForm = function (showErrors = false) {
+    if (showErrors) this.clearFormErrors();
+    const flowError = this.root.querySelector("#te-flow-error");
+    if (showErrors && flowError) flowError.textContent = "";
+
+    const id = this.root.querySelector("#te-form-id").value;
+    const tipo = this.getFlowEditorType();
+    const modelo = this.root.querySelector('input[name="te-model-kind"]:checked')?.value || "unico";
+    const nome = this.root.querySelector("#te-form-name").value.trim();
+    const atalho = this.normalizeShortcut(this.root.querySelector("#te-form-shortcut").value);
+    const triggerKey = this.root.querySelector("#te-form-trigger").value;
+    const categoriaId = this.root.querySelector("#te-form-category").value;
+    const category = this.getCategoryById(categoriaId) || this.resolveCategory(null, "Outros", tipo);
+    const favorito = this.root.querySelector("#te-form-favorite").checked;
+    const owners = this.getAllShortcutOwners(id, tipo);
+    const errors = [];
+
+    if (!nome) {
+      errors.push("Informe um nome para o modelo.");
+      if (showErrors) this.setFormError("name", "Informe um nome para o modelo.");
+    }
+    if (owners.has(atalho)) {
+      const message = `Esse atalho já pertence a “${owners.get(atalho)}” nesta área.`;
+      errors.push(message);
+      if (showErrors) this.setFormError("shortcut", message);
+    }
+
+    let conteudo = "";
+    let etapas = [];
+
+    if (modelo === "fluxo") {
+      etapas = this.syncEditingFlowSteps();
+      if (etapas.length < 2) errors.push(tipo === "protocolo"
+        ? "Um fluxo precisa ter pelo menos duas opções."
+        : "Uma sequência precisa ter pelo menos duas falas.");
+
+      const localShortcuts = new Set([atalho]);
+      for (let index = 0; index < etapas.length; index += 1) {
+        const step = etapas[index];
+        const specificError = tipo === "protocolo"
+          ? this.validateProtocolFlowStep(step, index)
+          : (!step.nome || !step.conteudo ? `Preencha o nome e o texto da fala ${index + 1}.` : "");
+        if (specificError) {
+          errors.push(specificError);
+          break;
+        }
+
+        step.atalho = this.normalizeShortcut(step.atalho);
+        if (localShortcuts.has(step.atalho)) {
+          errors.push(`O atalho ${step.atalho} está repetido dentro do fluxo.`);
+          break;
+        }
+        if (owners.has(step.atalho)) {
+          errors.push(`O atalho ${step.atalho} já pertence a “${owners.get(step.atalho)}”.`);
+          break;
+        }
+        localShortcuts.add(step.atalho);
+      }
+
+      conteudo = etapas
+        .map((step) => step.conteudo || this.describeFlowStepAction(step, { includeTargetName: false }))
+        .join("\n\n");
+      if (showErrors && flowError && errors.length) flowError.textContent = errors[errors.length - 1];
+    } else {
+      conteudo = this.root.querySelector("#te-form-content").value.trim();
+      if (!conteudo) {
+        errors.push("Informe o conteúdo que será inserido.");
+        if (showErrors) this.setFormError("content", "Informe o conteúdo que será inserido.");
+      }
+    }
+
+    if (errors.length) return { valid: false, errors, id, tipo, modelo };
+
+    const existingIndex = id ? this.snippets.findIndex((item) => item.id === id) : -1;
+    const base = existingIndex >= 0 ? this.snippets[existingIndex] : {};
+    const now = new Date().toISOString();
+    const snippet = this.normalizeSnippet({
+      ...base,
+      id: existingIndex >= 0 ? id : this.generateId(tipo),
+      tipo,
+      modelo,
+      nome,
+      atalho,
+      triggerKey,
+      categoriaId: category.id,
+      categoria: category.nome,
+      conteudo,
+      etapas,
+      favorito,
+      ativo: true,
+      origem: existingIndex >= 0 ? base.origem : "Criado pelo usuário",
+      updatedAt: now,
+      revision: Number(base.revision || 0) + 1
+    });
+    snippet.updatedAt = now;
+    snippet.revision = Number(base.revision || 0) + 1;
+
+    return { valid: true, id, tipo, modelo, existingIndex, snippet };
+  };
+
+  TextExpressApp.prototype.renderCard = function (snippet) {
+    if (snippet?.modelo !== "fluxo" || snippet.tipo !== "protocolo") {
+      return teV27Original.renderCard.call(this, snippet);
+    }
+
+    const selected = snippet.id === this.selectedId ? "te-selected" : "";
+    const category = this.getCategoryForSnippet(snippet);
+    const actionLabels = snippet.etapas.slice(0, 3)
+      .map((step) => `<span>${this.icon(this.getFlowActionIcon(step))}${this.escapeHtml(step.nome)}</span>`)
+      .join("");
+    return `
+      <article class="te-snippet-card te-flow-card te-protocol-flow-card ${selected}" tabindex="0" role="button" aria-selected="${snippet.id === this.selectedId ? "true" : "false"}" data-te-card-id="${this.escapeAttr(snippet.id)}" data-te-snippet-type="protocolo" style="--te-card-accent:${this.escapeAttr(category.cor)}">
+        <span class="te-card-icon" aria-hidden="true" style="--te-category-color:${this.escapeAttr(category.cor)}">${this.icon("clipboard-list")}</span>
+        <div class="te-card-main">
+          <div class="te-card-title-row">
+            <span class="te-card-title" title="${this.escapeAttr(snippet.nome)}">${this.escapeHtml(snippet.nome)}</span>
+            <span class="te-flow-count">${snippet.etapas.length} opções</span>
+          </div>
+          <div class="te-shortcut-line"><code>${this.escapeHtml(snippet.atalho)}</code><span>abre o fluxo</span></div>
+          <div class="te-protocol-flow-actions-preview">${actionLabels}</div>
+          <div class="te-card-actions">
+            <button class="te-text-button" type="button" data-te-action="edit" data-te-id="${this.escapeAttr(snippet.id)}">${this.icon("edit")} Editar</button>
+            <button class="te-text-button te-delete" type="button" data-te-action="delete" data-te-id="${this.escapeAttr(snippet.id)}">${this.icon("trash")} Excluir</button>
+            <button class="te-text-button te-card-insert" type="button" data-te-action="flow-open" data-te-id="${this.escapeAttr(snippet.id)}">${this.icon("play-circle")} Inserir</button>
+          </div>
+        </div>
+        <button class="te-favorite-button ${snippet.favorito ? "te-active" : ""}" type="button" data-te-action="favorite" data-te-id="${this.escapeAttr(snippet.id)}" title="Favorito">${this.icon("star")}</button>
+      </article>`;
+  };
+
+  TextExpressApp.prototype.renderFlowDetail = function (flow) {
+    if (flow?.tipo !== "protocolo") return teV27Original.renderFlowDetail.call(this, flow);
+
+    const category = this.getCategoryForSnippet(flow);
+    const state = this.getFlowState(flow);
+    this.detailPane.dataset.teSnippetType = "protocolo";
+    this.detailPane.style.setProperty("--te-detail-accent", category.cor);
+
+    const stepsHtml = flow.etapas.map((step, index) => {
+      const active = state.current === index;
+      const used = state.used.has(index);
+      return `
+        <article class="te-flow-step ${active ? "te-active" : ""} ${used ? "te-used" : ""}">
+          <button class="te-flow-step-summary" type="button" data-te-action="flow-step-select" data-te-id="${this.escapeAttr(flow.id)}" data-te-step-index="${index}">
+            <span class="te-flow-step-number">${used ? this.icon("check") : index + 1}</span>
+            <span class="te-flow-step-name">${this.escapeHtml(step.nome)}</span>
+            <span class="te-protocol-action-badge">${this.icon(this.getFlowActionIcon(step))}${this.escapeHtml(this.getFlowActionLabel(step))}</span>
+            <code>${this.escapeHtml(step.atalho)}</code>
+          </button>
+          <div class="te-flow-step-body ${active ? "" : "te-hidden"}">
+            <p>${this.escapeHtml(this.describeFlowStepAction(step))}</p>
+            <div class="te-flow-step-actions">
+              <button class="te-primary-button" type="button" data-te-action="flow-step-insert" data-te-id="${this.escapeAttr(flow.id)}" data-te-step-index="${index}">${this.icon(this.getFlowActionIcon(step))} Executar opção</button>
+            </div>
+          </div>
+        </article>`;
+    }).join("");
+
+    this.detailPane.innerHTML = `
+      <div class="te-detail-header te-flow-detail-header">
+        <div class="te-detail-title-wrap">
+          <span class="te-detail-category-icon" style="--te-category-color:${this.escapeAttr(category.cor)}">${this.icon("clipboard-list")}</span>
+          <div>
+            <h2>${this.escapeHtml(flow.nome)}</h2>
+            <div class="te-detail-meta">
+              <span>Fluxo de ${flow.etapas.length} opções</span>
+              <code>${this.escapeHtml(flow.atalho)}</code>
+              <span>abre o menu</span>
+            </div>
+          </div>
+        </div>
+        <div class="te-flow-header-actions">
+          <button class="te-primary-button te-sequence-open-detail" type="button" data-te-action="flow-open" data-te-id="${this.escapeAttr(flow.id)}">${this.icon("play-circle")} ABRIR FLUXO</button>
+          <button class="te-icon-action" type="button" data-te-action="flow-reset" data-te-id="${this.escapeAttr(flow.id)}" title="Reiniciar fluxo">${this.icon("rotate-ccw")}</button>
+          <button class="te-icon-action" type="button" data-te-action="edit" data-te-id="${this.escapeAttr(flow.id)}" title="Editar">${this.icon("edit")}</button>
+          <button class="te-favorite-button ${flow.favorito ? "te-active" : ""}" type="button" data-te-action="favorite" data-te-id="${this.escapeAttr(flow.id)}">${this.icon("star")}</button>
+        </div>
+      </div>
+      <section class="te-flow-steps-view">
+        <div class="te-flow-section-title"><strong>Opções do protocolo</strong><small>Opção ${state.current + 1} de ${flow.etapas.length}</small></div>
+        ${stepsHtml}
+      </section>`;
+  };
+
+  TextExpressApp.prototype.ensureSequenceMenu = function () {
+    const menu = teV27Original.ensureSequenceMenu.call(this);
+    if (!menu.querySelector('[data-te-action="workflow-back"]')) {
+      const meta = menu.querySelector(".te-sequence-menu-meta");
+      const back = document.createElement("button");
+      back.className = "te-sequence-back te-hidden";
+      back.type = "button";
+      back.dataset.teAction = "workflow-back";
+      back.title = "Voltar ao fluxo anterior";
+      back.setAttribute("aria-label", "Voltar ao fluxo anterior");
+      back.innerHTML = `${this.icon("chevron-left")}<small>Voltar</small>`;
+      meta?.prepend(back);
+    }
+    return menu;
+  };
+
+  TextExpressApp.prototype.getActiveSequence = function () {
+    if (!this.activeSequenceId) return null;
+    return this.snippets.find((item) =>
+      item.id === this.activeSequenceId && item.modelo === "fluxo" && item.ativo
+    ) || null;
+  };
+
+  TextExpressApp.prototype.getWorkflowStepPreview = function (flow, step) {
+    if (flow.tipo === "atendimento" || this.getFlowActionType(step) === TE_V27_FLOW_ACTIONS.INSERT) {
+      return step.conteudo;
+    }
+    return this.describeFlowStepAction(step);
+  };
+
+  TextExpressApp.prototype.renderSequenceMenu = function () {
+    this.ensureSequenceMenu();
+    const flow = this.getActiveSequence();
+    if (!flow) {
+      this.closeSequenceMenu(false);
+      return;
+    }
+
+    const isProtocol = flow.tipo === "protocolo";
+    const query = this.normalizeSearchText(this.sequenceSearchInput?.value || "");
+    const state = this.getFlowState(flow);
+    const matches = (flow.etapas || [])
+      .map((step, index) => ({ step, index }))
+      .filter(({ step, index }) => {
+        if (!query) return true;
+        const haystack = this.normalizeSearchText([
+          String(index + 1),
+          step.nome,
+          this.getWorkflowStepPreview(flow, step),
+          step.atalho,
+          ...(step.palavrasChave || []),
+          this.getFlowActionLabel(step)
+        ].join(" "));
+        return haystack.includes(query.replace(/^\//, "")) || haystack.includes(query);
+      });
+
+    const command = this.sequenceMenu.querySelector("#te-sequence-command");
+    const title = this.sequenceMenu.querySelector("#te-sequence-title");
+    const count = this.sequenceMenu.querySelector("#te-sequence-count");
+    const back = this.sequenceMenu.querySelector('[data-te-action="workflow-back"]');
+    const footerSpans = this.sequenceMenu.querySelectorAll(".te-sequence-menu-footer span");
+
+    if (command) command.textContent = `${isProtocol ? "FLUXO" : "SEQUÊNCIA"} ${flow.atalho}`;
+    if (title) title.textContent = flow.nome;
+    if (count) count.textContent = `${flow.etapas.length} ${isProtocol ? (flow.etapas.length === 1 ? "opção" : "opções") : (flow.etapas.length === 1 ? "pergunta" : "perguntas")}`;
+    back?.classList.toggle("te-hidden", !(this.workflowNavigationStack?.length));
+    this.sequenceMenu.setAttribute("aria-label", isProtocol ? "Fluxo de protocolo aberto" : "Sequência de atendimento aberta");
+    this.sequenceMenu.classList.toggle("te-protocol-workflow-menu", isProtocol);
+    if (footerSpans[0]) footerSpans[0].innerHTML = `${this.icon("zap")} No campo vazio, digite apenas o número. Também funciona por palavra-chave.`;
+    if (footerSpans[1]) footerSpans[1].textContent = isProtocol ? "O menu permanece aberto após executar." : "O menu permanece aberto após inserir.";
+
+    this.sequenceList.innerHTML = matches.length
+      ? matches.map(({ step, index }) => {
+          const keywords = this.getSequenceStepKeywords(step);
+          const chips = keywords.map((keyword) => `<code>${this.escapeHtml(keyword)}</code>`).join("");
+          const preview = this.getWorkflowStepPreview(flow, step);
+          return `
+            <button class="te-sequence-item ${state.current === index ? "te-current" : ""} ${state.used.has(index) ? "te-used" : ""}" type="button" data-te-action="sequence-step-insert" data-te-id="${this.escapeAttr(flow.id)}" data-te-step-index="${index}">
+              <span class="te-sequence-number">${index + 1}</span>
+              <span class="te-sequence-item-content">
+                <strong>${this.escapeHtml(step.nome)}</strong>
+                <span>${this.escapeHtml(preview)}</span>
+                ${isProtocol ? `<span class="te-protocol-action-inline">${this.icon(this.getFlowActionIcon(step))}${this.escapeHtml(this.getFlowActionLabel(step))}</span>` : ""}
+                <span class="te-sequence-keywords">${chips || "<em>Sem palavra-chave adicional</em>"}</span>
+              </span>
+              <span class="te-sequence-item-action">${state.used.has(index) ? this.icon("check-circle") : this.icon(this.getFlowActionIcon(step))}</span>
+            </button>`;
+        }).join("")
+      : `<div class="te-sequence-empty">${this.icon("search")}<strong>Nenhuma opção encontrada</strong><span>Limpe a busca ou use outra palavra-chave.</span></div>`;
+  };
+
+  TextExpressApp.prototype.openSequenceMenu = function (flowOrId, options = {}) {
+    const flow = typeof flowOrId === "string"
+      ? this.snippets.find((item) => item.id === flowOrId)
+      : flowOrId;
+    if (!flow || flow.modelo !== "fluxo" || !flow.ativo) {
+      this.showToast("Esse fluxo não está disponível.", "error");
+      return false;
+    }
+
+    this.ensureSequenceMenu();
+    if (!options.preserveStack && !options.pushCurrent) this.workflowNavigationStack = [];
+    if (options.pushCurrent && this.activeSequenceId && this.activeSequenceId !== flow.id) {
+      this.workflowNavigationStack = this.workflowNavigationStack || [];
+      this.workflowNavigationStack.push(this.activeSequenceId);
+      if (this.workflowNavigationStack.length > 20) this.workflowNavigationStack.shift();
+    }
+    this.activeSequenceId = flow.id;
+    if (!options.preserveSearch && this.sequenceSearchInput) this.sequenceSearchInput.value = "";
+    this.renderSequenceMenu();
+    this.sequenceMenu.classList.remove("te-hidden");
+    this.sequenceMenu.setAttribute("aria-hidden", "false");
+    return true;
+  };
+
+  TextExpressApp.prototype.closeSequenceMenu = function (announce = true) {
+    const flow = this.getActiveSequence();
+    const wasProtocol = flow?.tipo === "protocolo";
+    const result = teV27Original.closeSequenceMenu.call(this, false);
+    this.workflowNavigationStack = [];
+    this.sequenceMenu?.classList.remove("te-protocol-workflow-menu");
+    if (announce) this.showToast(wasProtocol ? "Fluxo fechado." : "Sequência fechada.");
+    return result;
+  };
+
+  TextExpressApp.prototype.navigateWorkflowBack = function () {
+    const previousId = this.workflowNavigationStack?.pop();
+    if (!previousId) return false;
+    const previous = this.snippets.find((item) => item.id === previousId && item.modelo === "fluxo");
+    if (!previous) return this.navigateWorkflowBack();
+    return this.openSequenceMenu(previous, { preserveStack: true });
+  };
+
+  TextExpressApp.prototype.handleRootClick = function (event) {
+    const actionButton = event.target.closest?.("[data-te-action]");
+    const action = actionButton?.dataset.teAction;
+
+    if (action === "workflow-back") {
+      event.preventDefault();
+      event.stopPropagation();
+      this.navigateWorkflowBack();
+      return;
+    }
+
+    if (action === "flow-open" || action === "sequence-open") {
+      const flow = this.snippets.find((item) => item.id === actionButton.dataset.teId && item.modelo === "fluxo");
+      if (flow) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.selectedId = flow.id;
+        this.lastShortcutType = flow.tipo;
+        this.openSequenceMenu(flow);
+        this.showToast(`${flow.tipo === "protocolo" ? "Fluxo" : "Sequência"} “${flow.nome}” aberto.`, "success");
+        this.collapseToLauncher?.();
+        window.requestAnimationFrame(() => this.constrainManagedWindow?.(this.sequenceMenu, "sequence"));
+        return;
+      }
+    }
+
+    return teV27Original.handleRootClick.call(this, event);
+  };
+
+  TextExpressApp.prototype.handleRootChange = function (event) {
+    const result = teV27Original.handleRootChange.call(this, event);
+    if (event.target.matches?.('[data-te-flow-field="acaoTipo"]')) {
+      this.syncEditingFlowSteps();
+      this.renderFlowEditorSteps();
+    }
+    return result;
+  };
+
+  TextExpressApp.prototype.handleRootInput = function (event) {
+    return teV27Original.handleRootInput.call(this, event);
+  };
+
+  TextExpressApp.prototype.clearFlowShortcutContext = function (context) {
+    if (!context) return true;
+    return this.applyInsertionContext(context, "");
+  };
+
+  TextExpressApp.prototype.markWorkflowStepUsed = function (flow, stepIndex) {
+    const state = this.getFlowState(flow);
+    state.current = stepIndex;
+    state.used.add(stepIndex);
+    if (this.selectedId === flow.id) this.renderDetail(flow);
+    if (this.activeSequenceId === flow.id) this.renderSequenceMenu();
+  };
+
+  TextExpressApp.prototype.registerProtocolFlowAction = function (key, handler) {
+    const normalizedKey = String(key || "").trim();
+    if (!normalizedKey || typeof handler !== "function") return false;
+    this.protocolFlowActionHandlers.set(normalizedKey, handler);
+    return true;
+  };
+
+  TextExpressApp.prototype.unregisterProtocolFlowAction = function (key) {
+    return this.protocolFlowActionHandlers.delete(String(key || "").trim());
+  };
+
+  TextExpressApp.prototype.executeCustomProtocolFlowAction = async function (flow, step, stepIndex, context) {
+    const handler = this.protocolFlowActionHandlers.get(step.acaoPersonalizada);
+    if (!handler) {
+      this.showToast(`A ação “${step.acaoPersonalizada}” não está registrada.`, "error", 5000);
+      return false;
+    }
+    try {
+      const result = await handler({ app: this, flow, step, stepIndex, context });
+      if (typeof result === "string") {
+        const refreshedContext = this.captureInsertionContext(
+          context?.element || this.lastActiveElement,
+          0
+        ) || context;
+        const inserted = refreshedContext
+          ? this.applyInsertionContext(refreshedContext, result)
+          : false;
+        if (!inserted) await this.copyText(result);
+      }
+      if (result?.openFlowId) {
+        const target = this.snippets.find((item) => item.id === result.openFlowId && item.modelo === "fluxo");
+        if (target) this.openSequenceMenu(target, { pushCurrent: true });
+      }
+      if (result?.message) this.showToast(String(result.message), "success");
+      return result !== false;
+    } catch (error) {
+      console.error("Text Express: ação personalizada", error);
+      this.showToast("A ação personalizada não pôde ser executada.", "error");
+      return false;
+    }
+  };
+
+  TextExpressApp.prototype.executeWorkflowStep = async function (flow, step, stepIndex, suppliedContext = null) {
+    const actionType = flow.tipo === "atendimento"
+      ? TE_V27_FLOW_ACTIONS.INSERT
+      : this.getFlowActionType(step);
+    const context = suppliedContext || this.captureInsertionContext(this.lastActiveElement, 0);
+
+    if (actionType === TE_V27_FLOW_ACTIONS.INSERT) {
+      const content = await this.processFlowStep(flow, step);
+      if (content === null) {
+        this.showToast("Execução cancelada.");
+        return false;
+      }
+      let inserted = false;
+      if (context) inserted = this.applyInsertionContext(context, content);
+      if (!inserted) {
+        await this.copyText(content);
+        this.showToast("Texto copiado.", "success", 1800);
+      } else {
+        this.showToast(flow.tipo === "protocolo" ? `Opção ${stepIndex + 1} inserida.` : `Pergunta ${stepIndex + 1} inserida.`, "success");
+      }
+      this.markWorkflowStepUsed(flow, stepIndex);
+      return inserted || true;
+    }
+
+    if (suppliedContext && !this.clearFlowShortcutContext(suppliedContext)) {
+      this.showToast("Não foi possível remover o atalho digitado.", "error");
+      return false;
+    }
+
+    if (actionType === TE_V27_FLOW_ACTIONS.FLOW || actionType === TE_V27_FLOW_ACTIONS.SEQUENCE) {
+      const expectedType = actionType === TE_V27_FLOW_ACTIONS.FLOW ? "protocolo" : "atendimento";
+      const target = this.snippets.find((item) =>
+        item.id === step.acaoAlvoId && item.tipo === expectedType && item.modelo === "fluxo" && item.ativo
+      );
+      if (!target) {
+        this.showToast("O fluxo de destino não está disponível.", "error");
+        return false;
+      }
+      this.markWorkflowStepUsed(flow, stepIndex);
+      this.openSequenceMenu(target, { pushCurrent: true });
+      this.showToast(`${target.tipo === "protocolo" ? "Fluxo" : "Sequência"} “${target.nome}” aberto.`, "success");
+      return true;
+    }
+
+    if (actionType === TE_V27_FLOW_ACTIONS.URL) {
+      const safeUrl = this.isSafeExternalFlowUrl(step.acaoUrl);
+      if (!safeUrl) {
+        this.showToast("O endereço externo configurado não é válido.", "error");
+        return false;
+      }
+      let opened = null;
+      try {
+        opened = window.open(safeUrl, "_blank");
+        if (opened) opened.opener = null;
+      } catch (error) {
+        opened = null;
+      }
+      this.markWorkflowStepUsed(flow, stepIndex);
+      this.showToast(
+        opened === null
+          ? "A abertura foi solicitada. Se a nova guia não apareceu, permita pop-ups para este sistema."
+          : "Atendimento externo aberto.",
+        opened === null ? "error" : "success",
+        4500
+      );
+      return true;
+    }
+
+    if (actionType === TE_V27_FLOW_ACTIONS.CUSTOM) {
+      const handled = await this.executeCustomProtocolFlowAction(flow, step, stepIndex, suppliedContext);
+      if (handled) this.markWorkflowStepUsed(flow, stepIndex);
+      return handled;
+    }
+
+    return false;
+  };
+
+  TextExpressApp.prototype.insertSequenceStep = async function (flowId, stepIndex, suppliedContext = null) {
+    const flow = this.snippets.find((item) => item.id === flowId && item.modelo === "fluxo");
+    const step = flow?.etapas?.[stepIndex];
+    if (!flow || !step) return false;
+    return this.executeWorkflowStep(flow, step, stepIndex, suppliedContext);
+  };
+
+  TextExpressApp.prototype.insertFlowStep = async function (flowId, stepIndex, advance = false) {
+    const result = await this.insertSequenceStep(flowId, stepIndex);
+    const flow = this.snippets.find((item) => item.id === flowId && item.modelo === "fluxo");
+    if (result && advance && flow && this.activeSequenceId === flow.id) {
+      const state = this.getFlowState(flow);
+      state.current = Math.min(stepIndex + 1, flow.etapas.length - 1);
+      if (this.selectedId === flow.id) this.renderDetail(flow);
+      this.renderSequenceMenu();
+    }
+    return result;
+  };
+
+  TextExpressApp.prototype.insertSnippet = async function (id) {
+    const snippet = this.snippets.find((item) => item.id === id);
+    if (snippet?.modelo === "fluxo") {
+      this.selectedId = snippet.id;
+      this.lastShortcutType = snippet.tipo;
+      this.openSequenceMenu(snippet);
+      this.collapseToLauncher?.();
+      return true;
+    }
+    return teV27Original.insertSnippet.call(this, id);
+  };
+
+  TextExpressApp.prototype.copySnippet = async function (id) {
+    const snippet = this.snippets.find((item) => item.id === id);
+    if (snippet?.tipo === "protocolo" && snippet.modelo === "fluxo") {
+      this.openSequenceMenu(snippet);
+      this.showToast("Escolha uma opção do fluxo.", "success");
+      return true;
+    }
+    return teV27Original.copySnippet.call(this, id);
+  };
+
+  TextExpressApp.prototype.expandShortcut = async function (entry, context) {
+    if (entry?.kind === "flow") {
+      if (!context) return;
+      this.lastActiveElement = context.element;
+      this.applyInsertionContext(context, "");
+      this.lastShortcutType = entry.snippet.tipo;
+      this.selectedId = entry.snippet.id;
+      this.openSequenceMenu(entry.snippet);
+      this.showToast(`${entry.snippet.tipo === "protocolo" ? "Fluxo" : "Sequência"} “${entry.snippet.nome}” aberto.`, "success");
+      return;
+    }
+    if (entry?.kind === "flow-step") {
+      return this.insertSequenceStep(entry.snippet.id, entry.stepIndex, context);
+    }
+    return teV27Original.expandShortcut.call(this, entry, context);
+  };
+
+  TextExpressApp.prototype.resetFlow = function (flowId) {
+    const flow = this.snippets.find((item) => item.id === flowId && item.modelo === "fluxo");
+    if (!flow) return;
+    this.flowProgress.set(flowId, { current: 0, used: new Set() });
+    this.flowVariableValues.delete(flowId);
+    if (this.selectedId === flow.id) this.renderDetail(flow);
+    if (this.activeSequenceId === flow.id) this.renderSequenceMenu();
+    this.showToast(flow.tipo === "protocolo" ? "Fluxo reiniciado." : "Sequência reiniciada.", "success");
+  };
+
+  TextExpressApp.prototype.updateCount = function () {
+    const result = teV27Original.updateCount.call(this);
+    const protocolFlows = this.snippets.filter((item) => item.tipo === "protocolo" && item.modelo === "fluxo" && item.ativo).length;
+    if (protocolFlows && this.statusCounts) {
+      this.statusCounts.textContent += ` · Fluxos de protocolo: ${protocolFlows}`;
+    }
+    return result;
+  };
+
+  TextExpressApp.prototype.init = function () {
+    this.workflowNavigationStack = [];
+    this.protocolFlowActionHandlers = new Map();
+    const result = teV27Original.init.call(this);
+    this.ensureSequenceMenu();
     this.root.dataset.version = APP_VERSION;
     return result;
   };

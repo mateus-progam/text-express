@@ -20,7 +20,7 @@
     </section>
   </main>
 
-  <div id="text-express-app" class="te-app" data-version="26.0.0">
+  <div id="text-express-app" class="te-app" data-version="27.0.0">
     <svg class="te-icon-sprite" aria-hidden="true" focusable="false">
       <symbol id="te-i-zap" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/></symbol>
       <symbol id="te-i-message-circle" viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.5 9.5 9.5 0 0 1-4-.9L3 21l1.6-4.2A8.5 8.5 0 1 1 21 11.5Z"/><path d="M8 12h.01M12 12h.01M16 12h.01"/></symbol>
@@ -195,14 +195,14 @@
           </fieldset>
 
           <fieldset class="te-model-kind-selector te-hidden" id="te-model-kind-selector">
-            <legend>Formato do atendimento</legend>
+            <legend id="te-model-kind-legend">Formato do atendimento</legend>
             <label>
               <input type="radio" name="te-model-kind" value="unico" checked>
-              <span><svg class="te-icon" aria-hidden="true"><use href="#te-i-message-circle"></use></svg> Fala única</span>
+              <span><svg class="te-icon" aria-hidden="true"><use href="#te-i-message-circle"></use></svg> <span data-te-kind-label="unico">Fala única</span></span>
             </label>
             <label>
               <input type="radio" name="te-model-kind" value="fluxo">
-              <span><svg class="te-icon" aria-hidden="true"><use href="#te-i-clipboard-list"></use></svg> Sequência de falas</span>
+              <span><svg class="te-icon" aria-hidden="true"><use href="#te-i-clipboard-list"></use></svg> <span data-te-kind-label="fluxo">Sequência de falas</span></span>
             </label>
           </fieldset>
 
@@ -251,11 +251,11 @@
             <section class="te-flow-editor te-field-wide te-hidden" id="te-flow-editor" aria-label="Editor da sequência de falas">
               <div class="te-flow-editor-heading">
                 <div>
-                  <strong>Falas da sequência</strong>
-                  <small>O atalho principal abre a sequência. Os atalhos numerados inserem uma fala diretamente.</small>
+                  <strong id="te-flow-editor-title">Falas da sequência</strong>
+                  <small id="te-flow-editor-help">O atalho principal abre a sequência. Os atalhos numerados inserem uma fala diretamente.</small>
                 </div>
                 <button class="te-secondary-button te-compact-button" type="button" data-te-action="flow-step-add">
-                  <svg class="te-icon" aria-hidden="true"><use href="#te-i-plus"></use></svg> Adicionar fala
+                  <svg class="te-icon" aria-hidden="true"><use href="#te-i-plus"></use></svg> <span id="te-flow-add-label">Adicionar fala</span>
                 </button>
               </div>
               <div class="te-flow-editor-steps" id="te-flow-editor-steps"></div>

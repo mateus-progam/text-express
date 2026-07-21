@@ -4053,3 +4053,98 @@
     min-height: 0;
   }
 }
+
+/* ==========================================================
+ * Text Express 27.0 — fluxos opcionais de Protocolo
+ * ========================================================== */
+.te-sequence-back {
+  min-width: 44px;
+  height: 38px;
+  border: 1px solid var(--te-border);
+  border-radius: 10px;
+  background: var(--te-surface-soft);
+  color: var(--te-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.te-sequence-back small {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.te-sequence-back:hover {
+  border-color: var(--te-primary);
+  color: var(--te-primary);
+}
+
+.te-protocol-workflow-menu .te-sequence-menu-icon,
+.te-protocol-workflow-menu .te-sequence-number {
+  color: #e64b4b;
+}
+
+.te-protocol-flow-actions-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.te-protocol-flow-actions-preview span,
+.te-protocol-action-inline,
+.te-protocol-action-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--te-border);
+  border-radius: 999px;
+  background: var(--te-surface-soft);
+  color: var(--te-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 4px 8px;
+}
+
+.te-protocol-action-inline {
+  width: fit-content;
+  margin-top: 4px;
+  color: var(--te-primary);
+}
+
+.te-protocol-action-badge {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.te-protocol-flow-step-editor .te-flow-step-editor-grid {
+  align-items: start;
+}
+
+.te-protocol-flow-step-editor .te-flow-step-content-field {
+  grid-column: 1 / -1;
+}
+
+.te-protocol-flow-step-editor .te-flow-step-content-field select,
+.te-protocol-flow-step-editor .te-flow-step-content-field input {
+  width: 100%;
+}
+
+.te-protocol-flow-step-editor code {
+  font-size: 11px;
+}
+
+@media (max-width: 760px) {
+  .te-protocol-action-badge {
+    display: none;
+  }
+
+  .te-sequence-back small {
+    display: none;
+  }
+}
